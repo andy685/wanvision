@@ -1,0 +1,31 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - switch
+      - generic [ref=e7] [cursor=pointer]
+    - button [ref=e16] [cursor=pointer]
+  - generic [ref=e59]:
+    - heading [level=2] [ref=e65]
+    - generic [ref=e67]:
+      - textbox "请输入后台手机号" [ref=e77]
+      - textbox "请输入后台密码" [ref=e88]
+      - generic [ref=e93]:
+        - textbox "验证码" [ref=e99]
+        - generic [ref=e102] [cursor=pointer]
+      - generic [ref=e105]:
+        - generic [ref=e106]:
+          - generic [ref=e107] [cursor=pointer]:
+            - generic [ref=e108]:
+              - checkbox "7 天内免登录"
+            - generic [ref=e111]:
+              - combobox [ref=e112]:
+                - option "1"
+                - option "7" [selected]
+                - option "30"
+              - text: 天内免登录
+          - button "忘记密码?" [ref=e115] [cursor=pointer]
+        - button "登录" [ref=e117] [cursor=pointer]
+  - generic [ref=e119]:
+    - text: Copyright © 2020-present
+    - link "万影工坊运营后台" [ref=e120] [cursor=pointer]:
+      - /url: https://github.com/pure-admin

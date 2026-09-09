@@ -1,0 +1,172 @@
+- generic [ref=f8e3]:
+  - generic [ref=f8e4]:
+    - link "logo 万影工坊运营后台" [ref=f8e6] [cursor=pointer]:
+      - /url: "#/wanying/overview"
+      - img "logo" [ref=f8e7]
+      - generic [ref=f8e8]: 万影工坊运营后台
+    - menubar [ref=f8e12]:
+      - menuitem "万影工坊" [expanded] [ref=f8e13]:
+        - menu [ref=f8e22]:
+          - link [ref=f8e23] [cursor=pointer]:
+            - /url: "#/wanying/overview"
+            - menuitem "平台概览" [ref=f8e24]
+          - link [ref=f8e27] [cursor=pointer]:
+            - /url: "#/wanying/services"
+            - menuitem "AI 服务" [ref=f8e28]
+          - link [ref=f8e31] [cursor=pointer]:
+            - /url: "#/wanying/payments"
+            - menuitem "支付渠道" [ref=f8e32]
+          - link [ref=f8e35] [cursor=pointer]:
+            - /url: "#/wanying/pricing"
+            - menuitem "价格规则" [ref=f8e36]
+          - link [ref=f8e39] [cursor=pointer]:
+            - /url: "#/wanying/users"
+            - menuitem "用户管理" [ref=f8e40]
+          - link [ref=f8e43] [cursor=pointer]:
+            - /url: "#/wanying/tasks"
+            - menuitem "生成任务" [ref=f8e44]
+          - link [ref=f8e47] [cursor=pointer]:
+            - /url: "#/wanying/orders"
+            - menuitem "充值订单" [ref=f8e48]
+          - link [ref=f8e51] [cursor=pointer]:
+            - /url: "#/wanying/logs"
+            - menuitem "操作日志" [ref=f8e52]
+    - img [ref=f8e56] [cursor=pointer]
+  - generic [ref=f8e59]:
+    - generic [ref=f8e60]:
+      - generic [ref=f8e61]:
+        - navigation "面包屑" [ref=f8e62]:
+          - link "平台概览" [ref=f8e64]
+        - generic [ref=f8e65]:
+          - generic [ref=f8e67] [cursor=pointer]
+          - button [ref=f8e71] [cursor=pointer]
+          - generic [ref=f8e74] [cursor=pointer]
+          - button [ref=f8e78] [cursor=pointer]:
+            - superscript [ref=f8e83]
+          - button [ref=f8e85] [cursor=pointer]:
+            - paragraph [ref=f8e87]: 平台超管
+          - generic "打开系统配置" [ref=f8e88] [cursor=pointer]
+      - generic [ref=f8e91]:
+        - generic [ref=f8e93]:
+          - generic [ref=f8e94] [cursor=pointer]: 首页
+          - generic [ref=f8e97] [cursor=pointer]: 平台概览
+        - button [ref=f8e105] [cursor=pointer]
+    - generic [ref=f8e112]:
+      - generic [ref=f8e114]:
+        - generic [ref=f8e115]:
+          - generic [ref=f8e116]:
+            - heading "平台概览" [level=1] [ref=f8e117]
+            - paragraph [ref=f8e118]: 查看平台用户、任务、订单和积分概况。
+          - button "刷新数据" [ref=f8e119] [cursor=pointer]
+        - generic [ref=f8e121]:
+          - generic [ref=f8e123]:
+            - generic [ref=f8e124]: 用户数
+            - strong [ref=f8e125]: "3"
+          - generic [ref=f8e127]:
+            - generic [ref=f8e128]: 生成任务
+            - strong [ref=f8e129]: "62"
+          - generic [ref=f8e131]:
+            - generic [ref=f8e132]: 待支付订单
+            - strong [ref=f8e133]: "0"
+          - generic [ref=f8e135]:
+            - generic [ref=f8e136]: 累计消费积分
+            - strong [ref=f8e137]: "0"
+        - generic [ref=f8e139]:
+          - heading "欢迎进入万影工坊运营后台" [level=2] [ref=f8e140]
+          - paragraph [ref=f8e141]: 平台 AI 服务、价格规则、支付渠道和业务数据统一在这里管理。
+      - generic [ref=f8e142]:
+        - text: Copyright © 2020-present
+        - link "万影工坊运营后台" [ref=f8e143] [cursor=pointer]:
+          - /url: https://github.com/pure-admin
+  - generic [ref=f8e144]:
+    - generic [ref=f8e145]:
+      - heading "系统配置" [level=4] [ref=f8e146]
+      - generic [ref=f8e147] [cursor=pointer]
+    - generic [ref=f8e153]:
+      - paragraph [ref=f8e154]: 主题模式
+      - generic [ref=f8e156]:
+        - generic [ref=f8e158] [cursor=pointer]:
+          - radio "浅色"
+          - generic [ref=f8e159]: 浅色
+        - generic [ref=f8e165] [cursor=pointer]:
+          - radio "深色"
+          - generic [ref=f8e166]: 深色
+        - generic [ref=f8e172] [cursor=pointer]:
+          - radio "自动"
+          - generic [ref=f8e173]: 自动
+      - paragraph [ref=f8e179]: 主题色
+      - list [ref=f8e180]:
+        - listitem [ref=f8e181] [cursor=pointer]
+        - listitem [ref=f8e185] [cursor=pointer]
+        - listitem [ref=f8e189] [cursor=pointer]
+        - listitem [ref=f8e193] [cursor=pointer]
+        - listitem [ref=f8e197] [cursor=pointer]
+        - listitem [ref=f8e201] [cursor=pointer]
+        - listitem [ref=f8e205] [cursor=pointer]
+        - listitem [ref=f8e209] [cursor=pointer]
+      - paragraph [ref=f8e213]: 菜单布局
+      - list [ref=f8e214]:
+        - listitem [ref=f8e215] [cursor=pointer]
+        - listitem [ref=f8e218] [cursor=pointer]
+        - listitem [ref=f8e220] [cursor=pointer]
+      - generic [ref=f8e223]:
+        - paragraph [ref=f8e224]: 页宽
+        - generic [ref=f8e226]:
+          - generic [ref=f8e228] [cursor=pointer]:
+            - radio "固定"
+            - generic [ref=f8e229]: 固定
+          - generic [ref=f8e231] [cursor=pointer]:
+            - radio "自定义"
+            - generic [ref=f8e232]: 自定义
+        - button [ref=f8e234] [cursor=pointer]
+      - paragraph [ref=f8e241]: 页签风格
+      - generic [ref=f8e243]:
+        - generic [ref=f8e245] [cursor=pointer]:
+          - radio "灵动"
+          - generic [ref=f8e246]: 灵动
+        - generic [ref=f8e248] [cursor=pointer]:
+          - radio "卡片"
+          - generic [ref=f8e249]: 卡片
+        - generic [ref=f8e251] [cursor=pointer]:
+          - radio "谷歌"
+          - generic [ref=f8e252]: 谷歌
+      - paragraph [ref=f8e254]: 全屏水印
+      - list [ref=f8e255]:
+        - listitem [ref=f8e256]:
+          - generic [ref=f8e257]: 水印
+          - generic [ref=f8e258]:
+            - switch
+            - generic [ref=f8e259] [cursor=pointer]: 关
+      - paragraph [ref=f8e264]: 界面显示
+      - list [ref=f8e265]:
+        - listitem [ref=f8e266]:
+          - generic [ref=f8e267]: 隐藏标签页
+          - generic [ref=f8e268]:
+            - switch
+            - generic [ref=f8e269] [cursor=pointer]: 关
+        - listitem [ref=f8e274]:
+          - generic [ref=f8e275]: 隐藏页脚
+          - generic [ref=f8e276]:
+            - switch
+            - generic [ref=f8e277] [cursor=pointer]: 关
+        - listitem [ref=f8e282]:
+          - generic [ref=f8e283]: 页签持久化
+          - generic [ref=f8e284]:
+            - switch
+            - generic [ref=f8e285] [cursor=pointer]: 关
+        - listitem [ref=f8e290]:
+          - generic [ref=f8e291]: Logo
+          - generic [ref=f8e292]:
+            - switch [checked]
+            - generic [ref=f8e293] [cursor=pointer]: 开
+        - listitem [ref=f8e298]:
+          - generic [ref=f8e299]: 灰色模式
+          - generic [ref=f8e300]:
+            - switch
+            - generic [ref=f8e301] [cursor=pointer]: 关
+        - listitem [ref=f8e306]:
+          - generic [ref=f8e307]: 色弱模式
+          - generic [ref=f8e308]:
+            - switch
+            - generic [ref=f8e309] [cursor=pointer]: 关
+    - button "清空缓存" [ref=f8e315] [cursor=pointer]

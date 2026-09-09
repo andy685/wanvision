@@ -1,0 +1,66 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: huobao_drama
+      MYSQL_USER: huobao
+      MYSQL_PASSWORD: huobao
+      MYSQL_ROOT_PASSWORD: huobao_root
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-phuobao_root"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  huobao-drama:
+    build: .
+    ports:
+      - "5679:5679"
+    volumes:
+      - ./data:/app/data
+      # skills 可在设置页在线编辑,且 workspace 是 Agent 文件读写 jail 根,需持久化
+      - ./backend/workspace:/app/backend/workspace
+    environment:
+      - NODE_ENV=production
+      - PORT=5679
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
+      - API_KEY_ENCRYPTION_SECRET=${API_KEY_ENCRYPTION_SECRET:-}
+      - DATABASE_URL=mysql://huobao:huobao@mysql:3306/huobao_drama
+      - COS_SECRET_ID=${COS_SECRET_ID:-}
+      - COS_SECRET_KEY=${COS_SECRET_KEY:-}
+      - COS_BUCKET=${COS_BUCKET:-}
+      - COS_REGION=${COS_REGION:-}
+      - COS_PREFIX=${COS_PREFIX:-wanying}
+      - ADMIN_PHONE=${ADMIN_PHONE:-}
+      - WECHAT_MCH_ID=${WECHAT_MCH_ID:-}
+      - WECHAT_APP_ID=${WECHAT_APP_ID:-}
+      - WECHAT_API_V3_KEY=${WECHAT_API_V3_KEY:-}
+      - WECHAT_SERIAL_NO=${WECHAT_SERIAL_NO:-}
+      - WECHAT_PRIVATE_KEY=${WECHAT_PRIVATE_KEY:-}
+      - WECHAT_PLATFORM_PUBLIC_KEY=${WECHAT_PLATFORM_PUBLIC_KEY:-}
+      - WECHAT_WEBHOOK_SECRET=${WECHAT_WEBHOOK_SECRET:-}
+      - ALIPAY_APP_ID=${ALIPAY_APP_ID:-}
+      - ALIPAY_PRIVATE_KEY=${ALIPAY_PRIVATE_KEY:-}
+      - ALIPAY_PUBLIC_KEY=${ALIPAY_PUBLIC_KEY:-}
+      - ALIPAY_RETURN_URL=${ALIPAY_RETURN_URL:-}
+      - ALIPAY_GATEWAY=${ALIPAY_GATEWAY:-https://openapi.alipay.com/gateway.do}
+      - ALIPAY_WEBHOOK_SECRET=${ALIPAY_WEBHOOK_SECRET:-}
+      - PAYMENT_NOTIFY_URL=${PAYMENT_NOTIFY_URL:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5679/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
