@@ -1,4 +1,4 @@
-# 🎬 万影工坊 - AI 短剧生成平台
+# 🎬 WanVision / 万影工坊
 
 <div align="center">
 
@@ -6,21 +6,8 @@
 
 [![Node Version](https://img.shields.io/badge/Node.js-20+-339933?style=flat&logo=node.js)](https://nodejs.org)
 [![Vue Version](https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat&logo=vue.js)](https://vuejs.org)
-[![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 [功能特性](#功能特性) • [快速开始](#快速开始) • [部署指南](#部署指南)
-
-### SaaS 化资料
-
-- [万影工坊 SaaS 产品需求梳理](docs/wanying-studio-saas-requirements.md)
-- [SaaS 实施进度清单](docs/saas-implementation-progress.md)
-- [腾讯云部署说明](docs/tencent-cloud-deployment.md)
-
-<h2>🔑 <a href="https://api.chatfire.site">获取万影 API Key 👉 立即查看</a></h2>
-
-**文本 · 图片 · 视频全部 AI 能力，一个 Key 即可开通**
-
-部署完成后在「设置 → 自有 API 快捷配置」粘贴 Key，一键写入三条推荐配置，开箱即用
 
 </div>
 
@@ -28,7 +15,7 @@
 
 ## 📖 项目简介
 
-万影工坊是一个基于 AI 的短剧自动化生产平台，实现从剧本生成、角色设计、分镜制作到视频合成的全流程自动化。
+WanVision（万影工坊）是一个基于 AI 的短剧自动化生产平台，实现从剧本生成、角色设计、分镜制作到视频合成的全流程自动化。
 
 ### 🎯 核心价值
 
@@ -46,8 +33,6 @@ backend/workspace/skills/ — Agent 技能定义 (SKILL.md，支持界面在线�
 data/       — 生成资源文件
 docker/     — init.sql 数据库初始化脚本(可选，启动时自动建表)
 ```
-
-> 🔥 **AI创作省钱攻略｜快乐马 & Seedance 合作专属折扣，优惠到底** 👉 [立即查看](https://aiad.dfycloud.com/)
 
 ---
 
@@ -118,8 +103,8 @@ docker/     — init.sql 数据库初始化脚本(可选，启动时自动建表
 |---|---|---|
 | `DATABASE_URL` | — | 完整 MySQL 连接串（优先） |
 | `MYSQL_HOST` / `MYSQL_PORT` | `127.0.0.1` / `3306` | 未设 `DATABASE_URL` 时分项配置 |
-| `MYSQL_USER` / `MYSQL_PASSWORD` | `huobao` / `huobao` | 同上 |
-| `MYSQL_DATABASE` | `huobao_drama` | 同上 |
+| `MYSQL_USER` / `MYSQL_PASSWORD` | `wanvision` / `wanvision` | 同上 |
+| `MYSQL_DATABASE` | `wanvision` | 同上 |
 | `PORT` | `5679` | 后端服务端口 |
 | `STORAGE_PATH` | `./data/static` | 生成文件存储目录 |
 | `FRONTEND_ORIGIN` | — | 生产用户端域名，多个域名用逗号分隔 |
@@ -134,8 +119,8 @@ docker/     — init.sql 数据库初始化脚本(可选，启动时自动建表
 
 ```bash
 # 克隆项目
-git clone https://github.com/chatfire-AI/huobao-drama.git
-cd huobao-drama
+git clone https://github.com/andy685/wanvision.git
+cd wanvision
 
 # 安装后端依赖
 cd backend && npm install
@@ -192,7 +177,7 @@ cd ../backend && npm start
 数据库表在首次启动时自动创建（幂等，每次启动自动重放初始化与迁移）。默认连接读取 `DATABASE_URL`，也可以通过 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE` 分项配置：
 
 ```bash
-DATABASE_URL=mysql://huobao:huobao@127.0.0.1:3306/huobao_drama npm start
+DATABASE_URL=mysql://wanvision:wanvision@127.0.0.1:3306/wanvision npm start
 ```
 
 如需在应用外预建表（如 DBA 审核场景），可使用 `docker/init.sql`；schema 变更后通过 `cd backend && npx tsx scripts/export-init-sql.ts` 重新生成。
@@ -202,7 +187,7 @@ DATABASE_URL=mysql://huobao:huobao@127.0.0.1:3306/huobao_drama npm start
 启动后所有 AI 功能（文本/生图/视频）都需要先配置模型服务，未配置时页面顶部会有横幅引导：
 
 1. 打开「设置」页
-2. 在「自有 API 快捷配置」中粘贴万影 API Key（[前往 api.chatfire.site 获取](https://api.chatfire.site)），一键写入文本、图片、视频三条推荐配置
+2. 在「自有 API 快捷配置」中粘贴你的文本/图片/视频 API Key，一键写入三条推荐配置
 3. 或使用「手动模板」按厂商逐个添加，支持连通性测试
 
 配置完成横幅自动消失，即可开始创建剧集生产。
@@ -238,43 +223,34 @@ docker compose down
 | `./backend/workspace` | Agent 技能文件（设置页可在线编辑） |
 | `mysql-data`(命名卷) | MySQL 数据 |
 
-> **提示**：compose 为源码构建方式，构建过程需从外网下载 `ffmpeg-static` / `sharp` 预编译二进制，网络受限环境请先配置 npm 镜像或代理；想跳过构建可直接使用方式二的 Docker Hub 预构建镜像。
+> **提示**：compose 为源码构建方式，构建过程需从外网下载 `ffmpeg-static` / `sharp` 预编译二进制，网络受限环境请先配置 npm 镜像或代理。
 
-#### 方式二：Docker 命令（Docker Hub 镜像）
-
-已发布多架构镜像（`linux/amd64` + `linux/arm64`，x86 服务器与 ARM 设备均自动匹配），无需克隆仓库、无需本地构建：
+#### 方式二：Docker 命令（预构建镜像）
 
 ```bash
-# 拉取镜像
-docker pull huobao/huobao-drama:3.0.0
+# 从源码构建镜像
+docker build -t wanvision:latest .
 
 # 运行(MySQL 需另行准备,通过 DATABASE_URL 指向;命名卷自动从镜像初始化 skills 等内容)
 docker run -d \
-  --name huobao-drama \
+  --name wanvision \
   -p 5679:5679 \
-  -v huobao-data:/app/data \
-  -v huobao-workspace:/app/backend/workspace \
-  -e DATABASE_URL=mysql://huobao:huobao@host.docker.internal:3306/huobao_drama \
+  -v wanvision-data:/app/data \
+  -v wanvision-workspace:/app/backend/workspace \
+  -e DATABASE_URL=mysql://wanvision:wanvision@host.docker.internal:3306/wanvision \
   --restart unless-stopped \
-  huobao/huobao-drama:3.0.0
+  wanvision:latest
 
 # 查看日志
-docker logs -f huobao-drama
+docker logs -f wanvision
 ```
 
 > **注意**：Linux 用户需添加 `--add-host=host.docker.internal:host-gateway` 以访问宿主机服务
 
-**从源码构建**（可选，需克隆仓库）：
-
-```bash
-docker build -t huobao-drama:latest .
-```
-
 **Docker 部署优势：**
 
-- ✅ Docker Hub 预构建多架构镜像（amd64 / arm64），免构建即拉即用
-- ✅ 开箱即用，内置 FFmpeg 二进制，无需系统安装
 - ✅ 前后端合并为单镜像、单端口
+- ✅ 开箱即用，内置 FFmpeg 二进制，无需系统安装
 - ✅ MySQL 健康检查 + 应用启动重试，首次部署零人工干预
 - ✅ `data/` 与 `workspace/` 目录 volume 挂载，数据与技能持久化
 
@@ -329,7 +305,7 @@ server {
     client_max_body_size 100m;
 
     location /static/ {
-        alias /path/to/huobao-drama/data/static/;
+        alias /path/to/wanvision/data/static/;
         sendfile on;
         tcp_nopush on;
         expires 1y;
@@ -383,7 +359,7 @@ server {
 
 ### 前端
 
-- **框架**: Nuxt 3 (SPA 模式)
+- **框架**: Nuxt 3（SPA 模式）
 - **语言**: Vue 3 + TypeScript
 - **路由**: 文件路由 (Vue Router 4)
 - **样式**: 纯 CSS + CSS Variables
@@ -477,41 +453,4 @@ A: 后端会在首次启动时自动创建所有表，检查日志确认初始�
 
 ---
 
-## 🤝 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本项目
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交改动 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-常用检查命令：
-
-```bash
-cd backend && npm run typecheck
-cd ../frontend && npm run build
-```
-
----
-
-## ☕ 捐赠支持
-
-如果这个项目对你有帮助，欢迎扫码请作者喝杯咖啡 ☕，你的支持是持续更新的动力！
-
-<div align="center">
-  <img src="donate.png" alt="支付宝捐赠二维码" width="240" />
-</div>
-
----
-
 > _"让 AI 帮我们做更有创造力的事"_
-
-## 🔗 友情链接
-
-本项目已获得 [LINUX DO](https://linux.do/) 社区链接认可。
-
-- [LINUX DO](https://linux.do/) — 真正的开源精神，共建共享的技术社区
-
----
