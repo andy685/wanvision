@@ -304,6 +304,9 @@ export const mysqlSchemaStatements = [
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(64) NOT NULL DEFAULT 'admin',
     phone VARCHAR(32) NOT NULL,
+    nickname VARCHAR(64) NULL,
+    avatar TEXT NULL,
+    email VARCHAR(128) NULL,
     password_hash TEXT NOT NULL,
     role VARCHAR(32) NOT NULL DEFAULT 'super_admin',
     status VARCHAR(32) NOT NULL DEFAULT 'active',
@@ -469,8 +472,7 @@ export const pricingRuleSeeds = [
   ['script_rewrite', 'text', 2, 'task'], ['asset_extract', 'text', 2, 'task'], ['storyboard_break', 'text', 3, 'task'],
   ['character_prompt', 'text', 1, 'task'], ['scene_prompt', 'text', 1, 'task'], ['prop_prompt', 'text', 1, 'task'],
   ['video_prompt', 'text', 1, 'storyboard'], ['character_image', 'image', 8, 'image'], ['scene_image', 'image', 6, 'image'],
-  ['prop_image', 'image', 5, 'image'], ['video_4s', 'video', 20, 'task'], ['video_8s', 'video', 40, 'task'],
-  ['video_12s', 'video', 60, 'task'], ['video_15s', 'video', 75, 'task'],
+  ['prop_image', 'image', 5, 'image'], ['video', 'video', 5, 'second'],
 ].map(([action, serviceType, price, unit]) => ({ action, serviceType, price, unit }))
 
 // INSERT ... SELECT WHERE NOT EXISTS → 幂等：只补缺失行，不覆盖用户编辑，
@@ -496,6 +498,8 @@ export async function initMySqlSchema(pool: Pool) {
   if (!userProfileColumns.length) await pool.query('ALTER TABLE users ADD COLUMN nickname VARCHAR(64) NULL AFTER phone, ADD COLUMN avatar TEXT NULL AFTER nickname')
   const [adminUsernameColumns] = await pool.query(`SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admin_users' AND COLUMN_NAME = 'username'`) as [{ COLUMN_NAME: string }[], unknown]
   if (!adminUsernameColumns.length) await pool.query("ALTER TABLE admin_users ADD COLUMN username VARCHAR(64) NOT NULL DEFAULT 'admin' AFTER id")
+  const [adminProfileColumns] = await pool.query(`SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admin_users' AND COLUMN_NAME = 'nickname'`) as [{ COLUMN_NAME: string }[], unknown]
+  if (!adminProfileColumns.length) await pool.query('ALTER TABLE admin_users ADD COLUMN nickname VARCHAR(64) NULL AFTER phone, ADD COLUMN avatar TEXT NULL AFTER nickname, ADD COLUMN email VARCHAR(128) NULL AFTER avatar')
   const [taskCostColumns] = await pool.query(`SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sys_task' AND COLUMN_NAME = 'credit_cost'`) as [{ COLUMN_NAME: string }[], unknown]
   if (!taskCostColumns.length) await pool.query('ALTER TABLE sys_task ADD COLUMN credit_cost INT NOT NULL DEFAULT 0, ADD COLUMN credit_status VARCHAR(32) DEFAULT \'none\'')
   const [taskWorkspaceColumns] = await pool.query(`SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sys_task' AND COLUMN_NAME = 'credit_workspace_id'`) as [{ COLUMN_NAME: string }[], unknown]

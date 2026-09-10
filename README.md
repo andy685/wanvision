@@ -27,12 +27,16 @@ WanVision（万影工坊）是一个基于 AI 的短剧自动化生产平台，�
 ### 🛠️ 技术架构
 
 ```
-frontend/   — Nuxt 3 + Vue 3 + TypeScript (纯 CSS，无 UI 框架)
-backend/    — Hono + Drizzle ORM + Mastra AI Agents + mysql2
+frontend/       — Nuxt 3 + Vue 3 + TypeScript 用户端(纯 CSS，无 UI 框架)
+admin-console/  — Vue 3 + Element Plus 独立管理后台(vue-pure-admin，需 pnpm 9+)
+backend/        — Hono + Drizzle ORM + Mastra AI Agents + mysql2
 backend/workspace/skills/ — Agent 技能定义 (SKILL.md，支持界面在线编辑)
-data/       — 生成资源文件
-docker/     — init.sql 数据库初始化脚本(可选，启动时自动建表)
+data/           — 生成资源文件
+docker/         — init.sql 数据库初始化脚本(可选，启动时自动建表)
+scripts/        — dev.sh / deploy.sh 一键启动与部署脚本
 ```
+
+> **注意**：`admin-console/` 是**完全独立的应用**，与用户端无代码复用，也不是 Nuxt 的一部分。历史上曾有一套内嵌在用户端的 `/admin` 路由后台，已删除。管理后台唯一入口就是 `admin-console`。
 
 ---
 
@@ -89,22 +93,24 @@ docker/     — init.sql 数据库初始化脚本(可选，启动时自动建表
 
 | 软件 | 版本要求 | 说明 |
 |---|---|---|
-| **Node.js** | 20+ | 前后端运行环境 |
-| **npm** | 9+ | 包管理工具 |
-| **MySQL** | 8.0+ | 数据库（Docker 部署已内置，无需单独安装） |
+| **Node.js** | 20+ | 后端 / 用户端运行环境 |
+| **Node.js** | 22+ | **仅 `admin-console` 构建需要**（pnpm 11 在 Node 20 下会报 `ERR_UNKNOWN_BUILTIN_MODULE`） |
+| **npm** | 9+ | 后端 / 用户端包管理 |
+| **pnpm** | 11 | **仅 `admin-console` 需要**，与后端/前端的 npm 不冲突 |
+| **MySQL** | 8.0+ | 本地开发由 `./scripts/dev.sh` 使用本机 MySQL 二进制初始化；Docker 部署已内置 |
 
 > **FFmpeg 无需安装**：项目通过 `ffmpeg-static` / `ffprobe-static` npm 包内置二进制，本地与 Docker 均开箱即用。
 
 ### ⚙️ 环境变量
 
-无需配置文件，通过环境变量设置（均有默认值，本地开发可零配置启动）：
+本地开发默认读取 `backend/.env`，统一使用 `mysql://huobao:huobao@127.0.0.1:3317/huobao_drama`。`./scripts/dev.sh` 会自动初始化并启动这份数据库。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `DATABASE_URL` | — | 完整 MySQL 连接串（优先） |
-| `MYSQL_HOST` / `MYSQL_PORT` | `127.0.0.1` / `3306` | 未设 `DATABASE_URL` 时分项配置 |
-| `MYSQL_USER` / `MYSQL_PASSWORD` | `wanvision` / `wanvision` | 同上 |
-| `MYSQL_DATABASE` | `wanvision` | 同上 |
+| `DATABASE_URL` | `mysql://huobao:huobao@127.0.0.1:3317/huobao_drama` | 完整 MySQL 连接串（优先） |
+| `MYSQL_HOST` / `MYSQL_PORT` | `127.0.0.1` / `3317` | 未设 `DATABASE_URL` 时分项配置 |
+| `MYSQL_USER` / `MYSQL_PASSWORD` | `huobao` / `huobao` | 同上 |
+| `MYSQL_DATABASE` | `huobao_drama` | 同上 |
 | `PORT` | `5679` | 后端服务端口 |
 | `STORAGE_PATH` | `./data/static` | 生成文件存储目录 |
 | `FRONTEND_ORIGIN` | — | 生产用户端域名，多个域名用逗号分隔 |
@@ -131,23 +137,28 @@ cd ../frontend && npm install
 
 ### 🎯 启动项目
 
-#### 方式一：开发模式（推荐）
+#### 方式一：本地开发模式（推荐）
 
-前后端分离，支持热重载：
+一条命令启动本地开发所需的全部服务：MySQL、后端、用户端、管理后台。三个应用各自独立运行，均支持热重载。
 
 ```bash
-# 终端1：启动后端
-cd backend
-npm run dev
+# 启动全部
+./scripts/dev.sh
 
-# 终端2：启动前端
-cd frontend
-npm run dev
+# 停止全部
+./scripts/dev.sh stop
 ```
 
-- 前端地址: `http://localhost:3013`
-- 后端 API: `http://localhost:5679/api/v1`
-- 前端自动代理 `/api` 和 `/static` 到后端
+| 应用 | 地址 | 端口 |
+|---|---|---|
+| MySQL | `mysql://huobao:huobao@127.0.0.1:3317/huobao_drama` | 3317 |
+| 用户端 | `http://localhost:3013` | 3013 |
+| 管理后台 | `http://localhost:3014` | 3014 |
+| 后端 API | `http://localhost:5679/api/v1` | 5679 |
+
+- 两个前端都自动代理 `/api` 和 `/static` 到后端，**后端未启动时页面能打开但接口会 404**
+- 管理后台用 **pnpm 11**（不是 npm）；本地版本不够时用 `corepack pnpm@11 dev`，不要在全局装旧版
+- 本地开发固定使用 `3317` 这份数据库，避免和 Docker 部署数据混用
 
 正式环境建议分域部署：
 
@@ -155,7 +166,7 @@ npm run dev
 - 管理后台：`https://admin.wanying.example.com`
 - API：可独立为 `https://api.wanying.example.com/api/v1`，也可由两个前端域名分别反向代理 `/api`
 
-#### 方式二：单服务模式
+#### 方式二：单服务模式（生产验证）
 
 后端同时提供 API 和前端静态文件：
 
@@ -174,10 +185,10 @@ cd ../backend && npm start
 
 ### 🗄️ 数据库
 
-数据库表在首次启动时自动创建（幂等，每次启动自动重放初始化与迁移）。默认连接读取 `DATABASE_URL`，也可以通过 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE` 分项配置：
+数据库表在首次启动时自动创建（幂等，每次启动自动重放初始化与迁移）。本地开发默认使用 `./scripts/dev.sh` 管理的 MySQL：
 
 ```bash
-DATABASE_URL=mysql://wanvision:wanvision@127.0.0.1:3306/wanvision npm start
+DATABASE_URL=mysql://huobao:huobao@127.0.0.1:3317/huobao_drama npm start
 ```
 
 如需在应用外预建表（如 DBA 审核场景），可使用 `docker/init.sql`；schema 变更后通过 `cd backend && npx tsx scripts/export-init-sql.ts` 重新生成。
@@ -196,24 +207,42 @@ DATABASE_URL=mysql://wanvision:wanvision@127.0.0.1:3306/wanvision npm start
 
 ## 📦 部署指南
 
+正式环境请优先使用根目录的 [DEPLOYMENT.md](./DEPLOYMENT.md)。那里包含纯净打包、生产环境变量、Docker Compose 编排、HTTPS 反向代理、备份和回滚步骤。
+
 ### 🐳 Docker 部署（推荐）
 
-#### 方式一：Docker Compose（推荐）
+#### 方式一：Docker Compose（部署 / 生产验证）
 
-一条命令拉起应用 + MySQL 8.4，含健康检查与启动顺序编排（应用等待 MySQL 就绪后启动，建表自动完成）：
+一条命令拉起 **3 个容器**（MySQL + 后端含用户端 + 独立管理后台），含健康检查与启动顺序编排（应用等待 MySQL 就绪后启动，建表自动完成）：
 
 ```bash
-# 构建并启动
+# 构建并启动（首次约 2-4 分钟）
 docker compose up -d --build
 
-# 查看日志
-docker compose logs -f
+# 无代码变更时用它，秒级
+docker compose up -d
 
-# 停止服务
-docker compose down
+# 或使用封装脚本（含环境检查、端口检测、健康验收）
+./scripts/deploy.sh
+
+# 查看日志 / 停止服务
+docker compose logs -f
+docker compose down          # 数据卷保留
 ```
 
-访问: `http://localhost:5679`
+| 应用 | 地址 | 端口 |
+|---|---|---|
+| 用户端 + 后端 API | `http://localhost:5679` | 5679 |
+| 管理后台 | `http://localhost:8081` | 8081 |
+| MySQL | 仅容器内部访问：`mysql:3306`（`huobao` / `huobao`） | 不暴露宿主机端口 |
+
+> 本地开发和 Docker 部署使用不同数据库：本地开发是 `127.0.0.1:3317`，Docker 部署是 compose 内部的 `mysql-data` 数据卷。日常开发请用 `./scripts/dev.sh`，Docker 仅用于部署形态验证。
+
+**管理后台默认账号**：`admin` / `Admin@123456`（角色 `super_admin`）
+
+> ⚠️ 这是**开发默认凭据**。生产环境必须在 `docker-compose.yml` 或环境变量中修改 `ADMIN_PHONE` / `ADMIN_USERNAME` / `ADMIN_PASSWORD`，否则任何人都能登录后台。
+
+> ⚠️ `NODE_ENV=production` 时若不设 `ADMIN_PHONE`，后端**不会创建任何超管账号**（`ensureBootstrapAdmin` 直接 return），表现为后台能打开但永远登不进。Compose 已内置默认值，独立部署 `docker run` 时必须显式传入。
 
 持久化数据：
 
@@ -237,7 +266,7 @@ docker run -d \
   -p 5679:5679 \
   -v wanvision-data:/app/data \
   -v wanvision-workspace:/app/backend/workspace \
-  -e DATABASE_URL=mysql://wanvision:wanvision@host.docker.internal:3306/wanvision \
+  -e DATABASE_URL=mysql://huobao:huobao@host.docker.internal:3317/huobao_drama \
   --restart unless-stopped \
   wanvision:latest
 
@@ -386,6 +415,28 @@ A: 这是正常的首次部署引导。前往「设置」页，用「自有 API 
 ### Q: 前端无法连接后端 API？
 
 A: 检查后端是否启动，端口是否正确。开发模式下前端代理配置在 `frontend/nuxt.config.ts`。
+
+### Q: 管理后台登录一直失败，也没有报错？
+
+A: 超管账号没被创建。后端 `NODE_ENV=production` 时若不设 `ADMIN_PHONE`，会跳过建号流程，此时后台能打开但永远登不进。检查：
+
+```bash
+docker compose logs huobao-drama | grep "已初始化超管账号"
+```
+
+看不到这行就是没建成功，需在 `docker-compose.yml` 中补 `ADMIN_PHONE` / `ADMIN_USERNAME` / `ADMIN_PASSWORD` 后重启。
+
+### Q: 管理后台页面能打开，但登录报 404？
+
+A: 反向代理没配对。管理后台所有请求走相对路径 `/api/v1`，必须转发到后端：开发模式看 `admin-console/vite.config.ts` 的 proxy 配置，容器模式看 `BACKEND_UPSTREAM` 环境变量。
+
+### Q: 管理后台能用手机号登录吗？
+
+A: 不能，也**不应该**。早期版本 `/admin-login` 支持按手机号回退查询，等于给后台开了第二个入口，已移除。现在只能用后台账号（默认 `admin`）登录。
+
+### Q: 构建 admin-console 报 `ERR_UNKNOWN_BUILTIN_MODULE`？
+
+A: pnpm 11 需要 Node 22+，Node 20 下必报此错。升级 Node，或直接用容器构建（Dockerfile 已固定 `node:22-alpine`）。
 
 ### Q: 数据库表未创建？
 

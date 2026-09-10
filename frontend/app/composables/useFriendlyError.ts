@@ -30,6 +30,26 @@ export function friendlyErrorMessage(error: unknown, fallback = '操作失败，
   const text = deepDecodeMessage(raw)
   const lower = text.toLowerCase()
 
+  if (/^(500|502|503)$/i.test(text)) {
+    return '服务暂时不可用，请稍后重试。如果连续出现，请检查后端日志或切换模型配置。'
+  }
+
+  if (/^504$/i.test(text)) {
+    return '生成服务响应超时了，通常是上游暂时繁忙。请稍后重试或切换模型配置。'
+  }
+
+  if (/^401$/i.test(text)) {
+    return '当前登录状态已失效，请重新登录后再试。'
+  }
+
+  if (/^403$/i.test(text)) {
+    return '当前账号权限不足，无法执行这个操作。'
+  }
+
+  if (/^404$/i.test(text)) {
+    return '没有找到对应的数据，请刷新页面后再试。'
+  }
+
   if (/input image .*may contain real person/i.test(text)
     || lower.includes('inputimagesensitivecontentdetected')
     || lower.includes('privacyinformation')) {
@@ -63,6 +83,25 @@ export function friendlyErrorMessage(error: unknown, fallback = '操作失败，
     return text.includes('积分不足') ? text : '积分不足，请先充值后再生成。'
   }
 
+  if (lower.includes('amount 和 note') || lower.includes('amount and note')) {
+    return '请填写调整积分和操作备注。'
+  }
+
+  if (/^(drama_id|episode_id|name|location|prompt|file|skill id|system_prompt) is required$/i.test(text)
+    || /^(drama_id|episode_id|name|location|prompt|file|skill id|system_prompt) required$/i.test(text)) {
+    const field = ({
+      drama_id: '项目',
+      episode_id: '剧集',
+      name: '名称',
+      location: '场景地点',
+      prompt: '提示词',
+      file: '文件',
+      'skill id': '技能标识',
+      system_prompt: '系统提示词',
+    } as Record<string, string>)[lower.replace(/\s+is required$/, '').replace(/\s+required$/, '')] || '必填内容'
+    return `请填写${field}。`
+  }
+
   if (lower.includes('unauthorized') || lower.includes('需要管理员权限') || lower.includes('请先登录')) {
     return '当前登录状态或账号权限不足，请重新登录后再试。'
   }
@@ -83,6 +122,10 @@ export function friendlyErrorMessage(error: unknown, fallback = '操作失败，
     return '服务没有返回可用的生成结果。请重试一次，或切换模型/配置。'
   }
 
+  if (lower.includes('task_id is empty') || lower.includes('no task_id') || lower.includes('task id')) {
+    return '视频服务没有返回任务 ID，系统无法继续查询生成进度。通常是上游没有受理本次请求，请检查视频模型配置、参考素材是否可访问，或稍后重试。'
+  }
+
   if (lower.includes('<html') || lower.includes('<!doctype')) {
     return '上游服务返回了异常页面，暂时无法完成生成。请稍后重试。'
   }
@@ -91,7 +134,7 @@ export function friendlyErrorMessage(error: unknown, fallback = '操作失败，
     return '请求没有被生成服务接受。请检查提示词、参考素材或模型配置后重试。'
   }
 
-  if (/api error 5\d\d/i.test(text)) {
+  if (/api error 5\d\d/i.test(text) || lower.includes('internal server error')) {
     return '生成服务暂时不可用，请稍后重试或切换模型配置。'
   }
 

@@ -14,7 +14,6 @@ import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuc
 import { friendlyErrorMessage } from '../utils/friendly-error.js'
 import { settleCredits } from './credits.js'
 import { reserveCredits } from './credits.js'
-import { randomUUID } from 'node:crypto'
 
 type TaskType = 'image' | 'video'
 
@@ -113,6 +112,7 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     dramaId: params.dramaId,
     prompt: params.prompt,
     model: params.model || config.model,
+    credit: params.credit,
   }, {
     referenceMode: params.referenceMode || 'reference',
     imageUrl: params.imageUrl,
@@ -160,8 +160,6 @@ async function createTask(
   params: Record<string, unknown>,
 ): Promise<number> {
   const ts = now()
-  const billingReference = `task:${randomUUID()}`
-  if (fields.credit?.cost) await reserveCredits(fields.credit.workspaceId, fields.credit.userId, fields.credit.cost, billingReference)
   const res = await db.insert(schema.sysTask).values({
     type,
     ...fields,
@@ -169,7 +167,7 @@ async function createTask(
     params: JSON.stringify(params),
     status: 'processing',
     creditCost: fields.credit?.cost || 0,
-    creditStatus: fields.credit?.cost ? 'frozen' : 'none',
+    creditStatus: fields.credit?.cost ? 'pending' : 'none',
     creditWorkspaceId: fields.credit?.workspaceId,
     creditUserId: fields.credit?.userId,
     createdAt: ts,
@@ -177,6 +175,19 @@ async function createTask(
   })
 
   const id = getInsertId(res)
+  try {
+    if (fields.credit?.cost) {
+      await reserveCredits(fields.credit.workspaceId, fields.credit.userId, fields.credit.cost, `task:${id}`)
+      await db.update(schema.sysTask)
+        .set({ creditStatus: 'frozen', updatedAt: now() })
+        .where(eq(schema.sysTask.id, id))
+    }
+  } catch (err: any) {
+    await db.update(schema.sysTask)
+      .set({ status: 'failed', creditStatus: 'none', errorMsg: friendlyErrorMessage(err), updatedAt: now(), completedAt: now() })
+      .where(eq(schema.sysTask.id, id))
+    throw err
+  }
   processTask(id, config).catch(err => {
     logTaskError(taskLabel(type), 'process', { id, error: err.message })
     console.error(`${taskLabel(type)} ${id} failed:`, err)

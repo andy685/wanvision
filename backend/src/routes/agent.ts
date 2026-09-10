@@ -12,6 +12,8 @@ import { db, getInsertId, schema } from '../db/index.js'
 import { now } from '../utils/response.js'
 import { eq } from 'drizzle-orm'
 import { getConfigById, getTextConfig } from '../services/ai.js'
+import { canAccessDrama } from '../utils/workspace-access.js'
+import { getPrice } from '../services/pricing.js'
 
 const app = new Hono()
 
@@ -31,6 +33,13 @@ function normalizeToolName(entry: any) {
 function normalizeToolResult(entry: any) {
   const result = entry?.payload?.result ?? entry?.result ?? entry?.payload?.output ?? entry?.output ?? entry?.data ?? null
   return typeof result === 'string' ? result : JSON.stringify(result)
+}
+
+function priceActionForAgent(agentType: string) {
+  if (agentType === 'script_rewriter') return 'script_rewrite'
+  if (agentType === 'storyboard_breaker') return 'storyboard_break'
+  if (agentType === 'prompt_generator') return 'video_prompt'
+  return agentType
 }
 
 // POST /agent/:type/chat — 非流式 Agent 对话
@@ -56,18 +65,24 @@ app.post('/:type/chat', async (c) => {
   }
 
   const creditOwner = await workspaceForToken((c.req.header('Authorization') || '').replace(/^Bearer\s+/i, '').trim(), Number(c.req.header('X-Workspace-Id') || 0) || undefined)
-  const agentCost = agentType === 'storyboard_breaker' ? 3 : agentType === 'prompt_generator' ? 1 : 2
+  const priceAction = priceActionForAgent(agentType)
+  const agentCost = await getPrice(priceAction)
   const textConfig = (body.config_id ? await getConfigById(Number(body.config_id), 'text') : null) || await getTextConfig()
   const resolvedModel = body.model || textConfig.model || null
   const taskResult = await db.insert(schema.sysTask).values({
     type: 'text', dramaId: Number(drama_id), prompt: String(message || ''), provider: agentType, model: resolvedModel,
-    params: JSON.stringify({ agent_type: agentType, episode_id, message }), status: 'processing',
-    creditCost: creditOwner ? agentCost : 0, creditStatus: creditOwner ? 'frozen' : 'none',
+    params: JSON.stringify({ agent_type: agentType, action: priceAction, episode_id, message }), status: 'processing',
+    creditCost: creditOwner ? agentCost : 0, creditStatus: creditOwner ? 'pending' : 'none',
     creditWorkspaceId: creditOwner?.workspaceId, creditUserId: creditOwner?.userId, createdAt: now(), updatedAt: now(),
   })
   const taskId = getInsertId(taskResult)
-  try { if (creditOwner) await reserveCredits(creditOwner.workspaceId, creditOwner.userId, agentCost, `task:${taskId}`) } catch (error: any) {
-    await db.update(schema.sysTask).set({ status: 'failed', errorMsg: error.message || '积分不足', updatedAt: now(), completedAt: now() }).where(eq(schema.sysTask.id, taskId))
+  try {
+    if (creditOwner) {
+      await reserveCredits(creditOwner.workspaceId, creditOwner.userId, agentCost, `task:${taskId}`)
+      await db.update(schema.sysTask).set({ creditStatus: 'frozen', updatedAt: now() }).where(eq(schema.sysTask.id, taskId))
+    }
+  } catch (error: any) {
+    await db.update(schema.sysTask).set({ status: 'failed', creditStatus: 'none', errorMsg: error.message || '积分不足', updatedAt: now(), completedAt: now() }).where(eq(schema.sysTask.id, taskId))
     return badRequest(c, error.message || '积分不足')
   }
 
@@ -118,6 +133,7 @@ app.post('/:type/chat', async (c) => {
 
     return success(c, {
       type: 'done',
+      task_id: taskId,
       text: result.text || '',
       toolCalls: normalizedToolCalls,
       toolResults: normalizedToolResults,
@@ -130,6 +146,36 @@ app.post('/:type/chat', async (c) => {
     await db.update(schema.sysTask).set({ status: 'failed', errorMsg: err.message || 'Agent execution failed', updatedAt: now(), completedAt: now() }).where(eq(schema.sysTask.id, taskId))
     return badRequest(c, err.message || 'Agent execution failed')
   }
+})
+
+// GET /agent/:type/status — 查询某集最近一次 Agent 任务，供刷新页面后恢复“进行中”状态
+app.get('/:type/status', async (c) => {
+  const agentType = c.req.param('type')
+  if (!validAgentTypes.includes(agentType)) return badRequest(c, `Invalid agent type: ${agentType}`)
+
+  const dramaId = Number(c.req.query('drama_id') || 0)
+  const episodeId = Number(c.req.query('episode_id') || 0)
+  if (!dramaId || !episodeId) return badRequest(c, 'drama_id and episode_id are required')
+  if (!await canAccessDrama(c, dramaId)) {
+    return c.json({ code: 403, message: '当前用户没有查看该任务状态的权限' }, 403)
+  }
+
+  const rows = await db.select().from(schema.sysTask)
+    .where(eq(schema.sysTask.dramaId, dramaId))
+
+  const matched = rows
+    .filter(row => {
+      if (row.type !== 'text' || row.provider !== agentType) return false
+      try {
+        const params = JSON.parse(row.params || '{}')
+        return Number(params.episode_id || 0) === episodeId
+      } catch {
+        return false
+      }
+    })
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+
+  return success(c, matched[0] || null)
 })
 
 // GET /agent/:type/debug

@@ -10,6 +10,8 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@pinia/nuxt": "^1.0.2",
+    "@tanstack/vue-query": "^5.102.8",
     "element-plus": "^2.14.5",
     "lucide-vue-next": "^0.511.0",
     "nuxt": "3.21.11",

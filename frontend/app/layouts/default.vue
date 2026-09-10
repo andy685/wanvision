@@ -10,21 +10,11 @@
           </div>
           <div class="brand-text">
             <span class="brand-name">万影工坊</span>
-            <span class="brand-sub">Wanying Studio</span>
+            <span class="brand-sub">wanvision</span>
           </div>
         </button>
       </div>
 
-      <nav class="header-nav">
-        <a v-if="user?.role === 'admin'" :href="adminHref('/admin?tab=services')" class="nav-link">
-          <Settings :size="15" :stroke-width="1.8" />
-          <span>AI 配置</span>
-        </a>
-        <a v-if="user?.role === 'admin'" :href="adminHref('/admin')" class="nav-link">
-          <ShieldCheck :size="15" :stroke-width="1.8" />
-          <span>运营后台</span>
-        </a>
-      </nav>
       <div class="header-account" ref="accountMenuRef">
         <template v-if="user">
           <NuxtLink to="/credits" class="credit-chip" title="查看积分余额">
@@ -54,10 +44,6 @@
               积分中心
               <span class="menu-balance">{{ creditBalance }}</span>
             </NuxtLink>
-            <a v-if="user?.role === 'admin'" :href="adminHref('/admin')" class="account-menu-item" role="menuitem" @click="accountMenuOpen = false">
-              <ShieldCheck :size="15" :stroke-width="1.8" />
-              运营后台
-            </a>
             <button class="account-menu-item danger" type="button" role="menuitem" @click="handleSignOut">
               <LogOut :size="15" :stroke-width="1.8" />
               退出登录
@@ -72,7 +58,7 @@
     <div v-if="missingConfigLabels.length" class="config-banner">
       <TriangleAlert :size="14" :stroke-width="1.8" />
       <span>尚未配置{{ missingConfigLabels.join('、') }}模型,AI 功能无法使用</span>
-      <a v-if="user?.role === 'admin'" :href="adminHref('/admin?tab=services')" class="config-banner-link">前往后台配置</a>
+      <a v-if="user?.role === 'admin' && adminOrigin" :href="adminOrigin" class="config-banner-link">前往后台配置</a>
       <span v-else class="config-banner-link config-banner-contact">请联系管理员配置</span>
     </div>
 
@@ -83,9 +69,9 @@
 </template>
 
 <script setup>
-import { ChevronDown, LogOut, Settings, ShieldCheck, TriangleAlert, UserRound, WalletCards } from 'lucide-vue-next'
+import { ChevronDown, LogOut, TriangleAlert, UserRound, WalletCards } from 'lucide-vue-next'
 import { aiConfigAPI, creditAPI } from '~/composables/useApi'
-import brandLogo from '~/assets/huobao-logo.png'
+import brandLogo from '~/assets/logo.svg'
 import defaultAvatar from '~/assets/wanying-default-avatar.png'
 
 const route = useRoute()
@@ -100,10 +86,7 @@ const accountMenuOpen = ref(false)
 const accountMenuRef = ref(null)
 const accountAvatar = computed(() => user.value?.avatar || defaultAvatar)
 
-function adminHref(path = '/admin') {
-  const origin = String(config.public.adminOrigin || '').replace(/\/+$/, '')
-  return origin ? `${origin}${path}` : path
-}
+const adminOrigin = String(config.public.adminOrigin || '').replace(/\/+$/, '')
 
 async function checkAiConfigs() {
   try {
@@ -289,10 +272,11 @@ onBeforeUnmount(() => {
 }
 
 .brand {
-  display: flex; align-items: center; gap: 11px;
+  display: flex; align-items: center; gap: 9px;
   background: transparent; border: none; cursor: pointer; padding: 4px 8px 4px 4px;
   text-decoration: none; border-radius: var(--radius);
   transition: background 0.18s var(--ease-out);
+  color: var(--text-0);
 }
 .brand:hover { background: var(--bg-hover); }
 .brand:focus-visible {
@@ -306,8 +290,8 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 .brand-logo {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   object-fit: contain;
   display: block;
 }
@@ -317,16 +301,24 @@ onBeforeUnmount(() => {
   color: #fff;
   line-height: 1;
 }
-.brand-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
+.brand-text {
+  height: 32px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 1px;
+}
 .brand-name {
   font-size: 15px; font-weight: 700;
+  line-height: 1.15;
   color: var(--text-0);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 .brand-sub {
   font-size: 10px; font-weight: 400;
-  color: var(--text-3); margin-top: 1px;
-  letter-spacing: 0.04em;
+  line-height: 1.1;
+  color: var(--text-3);
+  letter-spacing: 0;
 }
 
 /* Nav — pill segmented group */

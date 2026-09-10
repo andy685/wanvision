@@ -15,7 +15,7 @@ export async function workspaceForToken(token: string, requestedWorkspaceId?: nu
   return row || null
 }
 
-export async function reserveCredits(workspaceId: number, userId: number, amount: number, referenceId: string) {
+export async function reserveCredits(workspaceId: number, userId: number, amount: number, referenceId: string, note?: string) {
   if (amount <= 0) return
   const connection = await pool.getConnection()
   try {
@@ -25,7 +25,7 @@ export async function reserveCredits(workspaceId: number, userId: number, amount
     if (!account || account.balance < amount) throw new Error(`积分不足，还需要 ${amount - (account?.balance || 0)} 积分`)
     const balanceAfter = account.balance - amount
     await connection.query('UPDATE credit_accounts SET balance = balance - ?, frozen = frozen + ?, updated_at = ? WHERE workspace_id = ?', [amount, amount, now(), workspaceId])
-    await connection.query('INSERT INTO credit_ledger (workspace_id, user_id, type, amount, balance_after, reference_type, reference_id, note, idempotency_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [workspaceId, userId, 'freeze', -amount, balanceAfter, 'task', referenceId, `冻结 ${amount} 积分`, `freeze:${referenceId}`, now()])
+    await connection.query('INSERT INTO credit_ledger (workspace_id, user_id, type, amount, balance_after, reference_type, reference_id, note, idempotency_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [workspaceId, userId, 'freeze', -amount, balanceAfter, 'task', referenceId, note || `冻结 ${amount} 积分`, `freeze:${referenceId}`, now()])
     await connection.commit()
   } catch (error) { await connection.rollback(); throw error } finally { connection.release() }
 }

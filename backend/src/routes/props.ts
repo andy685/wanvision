@@ -8,8 +8,9 @@ import { getDramaStylePrompt } from '../services/style-preset.js'
 import { ensurePropFinalPrompt } from '../services/final-prompt.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 import { canAccessDrama, canAccessEpisode, canWriteDrama } from '../utils/workspace-access.js'
-import { workspaceForToken, consumeCredits } from '../services/credits.js'
+import { workspaceForToken } from '../services/credits.js'
 import { getPrice } from '../services/pricing.js'
+import { runBillableTextTask } from '../services/text-task.js'
 
 const app = new Hono()
 
@@ -103,18 +104,31 @@ app.post('/:id/generate-prompt', async (c) => {
   const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id)))
   if (!ep) return badRequest(c, 'Episode not found')
   if (ep.dramaId !== prop.dramaId) return badRequest(c, '道具与剧集不属于同一项目')
+  if (prop.finalPrompt && !body.force) return success(c, { final_prompt: prop.finalPrompt })
   logTaskStart('FinalPrompt', 'prop-generate', { propId: id, episodeId: ep.id, force: !!body.force })
-  const finalPrompt = await ensurePropFinalPrompt(prop, ep.id, !!body.force, { model: body.text_model, configId: body.text_config_id ?? undefined })
-  if (!finalPrompt) {
-    logTaskError('FinalPrompt', 'prop-generate', { propId: id, error: 'agent returned empty prompt' })
-    return badRequest(c, '最终提示词生成失败，请重试')
-  }
   const promptCost = await getPrice('prop_prompt')
   const creditOwner = await workspaceForToken((c.req.header('Authorization') || '').replace(/^Bearer\s+/i, '').trim(), Number(c.req.header('X-Workspace-Id') || 0) || undefined)
   if (!creditOwner) return badRequest(c, '未找到可用积分账户')
-  await consumeCredits(creditOwner.workspaceId, creditOwner.userId, promptCost, `prop-prompt:${id}:${Date.now()}`, `道具提示词生成 ${promptCost} 积分`)
-  logTaskSuccess('FinalPrompt', 'prop-generate', { propId: id })
-  return success(c, { final_prompt: finalPrompt })
+  try {
+    const finalPrompt = await runBillableTextTask({
+      dramaId: prop.dramaId,
+      episodeId: ep.id,
+      propId: id,
+      provider: 'prompt_generator',
+      model: body.text_model || null,
+      prompt: `为道具「${prop.name}」生成白底单品最终提示词`,
+      params: { agent_type: 'prompt_generator', action: 'prop_prompt', prop_id: id, force: !!body.force },
+      credit: { workspaceId: creditOwner.workspaceId, userId: creditOwner.userId, cost: promptCost },
+      run: () => ensurePropFinalPrompt(prop, ep.id, !!body.force, { model: body.text_model, configId: body.text_config_id ?? undefined }),
+      validate: prompt => !!String(prompt || '').trim(),
+      emptyMessage: '最终提示词生成失败，请重试',
+    })
+    logTaskSuccess('FinalPrompt', 'prop-generate', { propId: id })
+    return success(c, { final_prompt: finalPrompt })
+  } catch (err: any) {
+    logTaskError('FinalPrompt', 'prop-generate', { propId: id, error: err.message })
+    return badRequest(c, err.message || '最终提示词生成失败，请重试')
+  }
 })
 
 // POST /props/:id/generate-image — 生成道具白底单品图

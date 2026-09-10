@@ -1,7 +1,9 @@
 import { Hono } from 'hono'
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import type { RowDataPacket } from 'mysql2'
 import { count, desc, eq, sql } from 'drizzle-orm'
 import { db, pool, schema } from '../db/index.js'
-import { badRequest, success } from '../utils/response.js'
+import { badRequest, now, success } from '../utils/response.js'
 import { currentAdmin } from '../utils/workspace-access.js'
 import { toSnakeCase, toSnakeCaseArray } from '../utils/transform.js'
 import { adjustCredits, settleCredits } from '../services/credits.js'
@@ -10,16 +12,237 @@ import { generateImage, generateVideo } from '../services/generation.js'
 import { getActiveConfigId } from '../services/ai.js'
 import { getPrice, videoActionForDuration } from '../services/pricing.js'
 import { getPlatformSetting, setPlatformSetting } from '../services/platform-settings.js'
+import { resolveTaskNames } from '../utils/task-name.js'
+import { generateImageThumb, saveBase64Image } from '../utils/storage.js'
 
 const app = new Hono()
 const PAYMENT_SETTING_KEYS = ['wechat_enabled', 'wechat_mch_id', 'wechat_app_id', 'wechat_api_v3_key', 'wechat_serial_no', 'wechat_private_key', 'wechat_platform_public_key', 'wechat_webhook_secret', 'alipay_enabled', 'alipay_app_id', 'alipay_private_key', 'alipay_public_key', 'alipay_return_url', 'payment_notify_url'] as const
 const PAYMENT_SECRET_KEYS = new Set(PAYMENT_SETTING_KEYS.filter(key => !['wechat_mch_id', 'wechat_app_id', 'wechat_serial_no', 'alipay_app_id', 'alipay_return_url', 'payment_notify_url'].includes(key)))
 const PAYMENT_BOOLEAN_KEYS = new Set(['wechat_enabled', 'alipay_enabled'])
+const ADMIN_ROLES = new Set(['super_admin', 'admin'])
+const ADMIN_STATUSES = new Set(['active', 'disabled'])
+
+function hashPassword(password: string, salt = randomBytes(16).toString('hex')) {
+  const digest = scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${digest}`
+}
+
+function verifyPassword(password: string, encoded: string) {
+  const [salt, digest] = encoded.split(':')
+  if (!salt || !digest) return false
+  const actual = scryptSync(password, salt, 64)
+  const expected = Buffer.from(digest, 'hex')
+  return expected.length === actual.length && timingSafeEqual(actual, expected)
+}
+
+function publicAdmin(admin: typeof schema.adminUsers.$inferSelect) {
+  return {
+    id: admin.id,
+    username: admin.username,
+    phone: admin.phone,
+    nickname: admin.nickname || admin.username,
+    avatar: admin.avatar || '',
+    email: admin.email || '',
+    role: admin.role,
+    status: admin.status,
+    created_at: admin.createdAt,
+    updated_at: admin.updatedAt
+  }
+}
 
 async function adminOnly(c: any) {
   const user = await currentAdmin(c)
   return user?.role === 'super_admin' || user?.role === 'admin' ? user : null
 }
+
+async function requireSuperAdmin(c: any) {
+  const admin = await currentAdmin(c)
+  if (!admin || admin.role !== 'super_admin') return null
+  return admin
+}
+
+app.get('/mine', async (c) => {
+  const admin = await adminOnly(c)
+  if (!admin) return c.json({ code: 403, message: '需要管理员权限' }, 403)
+  return success(c, {
+    avatar: admin.avatar || '',
+    username: admin.username,
+    nickname: admin.nickname || admin.username,
+    email: admin.email || '',
+    phone: admin.phone,
+    description: admin.role === 'super_admin' ? '平台超级管理员' : '平台管理员'
+  })
+})
+
+app.put('/mine', async (c) => {
+  const admin = await adminOnly(c)
+  if (!admin) return c.json({ code: 403, message: '需要管理员权限' }, 403)
+  const body = await c.req.json().catch(() => ({}))
+  const nickname = typeof body.nickname === 'string' ? body.nickname.trim().slice(0, 64) : admin.nickname || ''
+  const avatar = typeof body.avatar === 'string' ? body.avatar.trim().slice(0, 2048) : admin.avatar || ''
+  const email = typeof body.email === 'string' ? body.email.trim().slice(0, 128) : admin.email || ''
+  const phone = typeof body.phone === 'string' ? body.phone.trim() : admin.phone
+  if (!nickname) return badRequest(c, '昵称不能为空')
+  if (!/^1[3-9]\d{9}$/.test(phone)) return badRequest(c, '请输入有效的 11 位手机号')
+  if (phone !== admin.phone) {
+    const [samePhone] = await db.select({ id: schema.adminUsers.id }).from(schema.adminUsers).where(eq(schema.adminUsers.phone, phone))
+    if (samePhone) return badRequest(c, '手机号已被后台账号使用')
+  }
+  await db.update(schema.adminUsers).set({ nickname, avatar, email, phone, updatedAt: now() }).where(eq(schema.adminUsers.id, admin.id))
+  await logAdminAction(admin.id, 'admin_profile_update', 'admin_user', admin.id, { fields: ['nickname', 'avatar', 'email', 'phone'] })
+  return success(c, {
+    avatar,
+    username: admin.username,
+    nickname,
+    email,
+    phone,
+    description: admin.role === 'super_admin' ? '平台超级管理员' : '平台管理员'
+  })
+})
+
+app.post('/avatar', async (c) => {
+  const admin = await adminOnly(c)
+  if (!admin) return c.json({ code: 403, message: '需要管理员权限' }, 403)
+  const body = await c.req.json().catch(() => ({}))
+  const avatar = typeof body.avatar === 'string' ? body.avatar : ''
+  const match = avatar.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/)
+  if (!match) return badRequest(c, '头像图片格式无效')
+  const base64 = match[2]
+  const byteLength = Buffer.byteLength(base64, 'base64')
+  if (byteLength > 2 * 1024 * 1024) return badRequest(c, '头像图片不能超过 2MB')
+  const path = await saveBase64Image(base64, match[1] === 'image/jpg' ? 'image/jpeg' : match[1], 'avatars')
+  await generateImageThumb(path)
+  const avatarUrl = `/${path}`
+  const nickname = typeof body.nickname === 'string' ? body.nickname.trim().slice(0, 64) : admin.nickname || admin.username
+  const email = typeof body.email === 'string' ? body.email.trim().slice(0, 128) : admin.email || ''
+  await db.update(schema.adminUsers).set({ avatar: avatarUrl, nickname, email, updatedAt: now() }).where(eq(schema.adminUsers.id, admin.id))
+  await logAdminAction(admin.id, 'admin_avatar_update', 'admin_user', admin.id)
+  return success(c, {
+    avatar: avatarUrl,
+    username: admin.username,
+    nickname,
+    email,
+    phone: admin.phone,
+    description: admin.role === 'super_admin' ? '平台超级管理员' : '平台管理员'
+  })
+})
+
+app.post('/password', async (c) => {
+  const admin = await adminOnly(c)
+  if (!admin) return c.json({ code: 403, message: '需要管理员权限' }, 403)
+  const body = await c.req.json().catch(() => ({}))
+  const currentPassword = typeof body.current_password === 'string' ? body.current_password : ''
+  const newPassword = typeof body.new_password === 'string' ? body.new_password : ''
+  if (newPassword.length < 8) return badRequest(c, '新密码至少需要 8 位')
+  if (!verifyPassword(currentPassword, admin.passwordHash)) return badRequest(c, '当前密码不正确')
+  await db.update(schema.adminUsers).set({ passwordHash: hashPassword(newPassword), updatedAt: now() }).where(eq(schema.adminUsers.id, admin.id))
+  await db.delete(schema.adminSessions).where(eq(schema.adminSessions.adminUserId, admin.id))
+  await logAdminAction(admin.id, 'admin_password_change', 'admin_user', admin.id)
+  return success(c, { message: '密码修改成功，请重新登录' })
+})
+
+app.get('/mine-logs', async (c) => {
+  const admin = await adminOnly(c)
+  if (!admin) return c.json({ code: 403, message: '需要管理员权限' }, 403)
+  const rows = await db.select().from(schema.adminAuditLogs)
+    .where(eq(schema.adminAuditLogs.adminUserId, admin.id))
+    .orderBy(desc(schema.adminAuditLogs.createdAt))
+  return success(c, {
+    list: rows.slice(0, 20).map(row => ({
+      id: row.id,
+      ip: '-',
+      address: '-',
+      system: '-',
+      browser: '-',
+      summary: row.action,
+      operatingTime: row.createdAt
+    })),
+    total: rows.length,
+    pageSize: 20,
+    currentPage: 1
+  })
+})
+
+app.get('/admins', async (c) => {
+  const admin = await requireSuperAdmin(c)
+  if (!admin) return c.json({ code: 403, message: '需要超级管理员权限' }, 403)
+  const rows = await db.select().from(schema.adminUsers).orderBy(desc(schema.adminUsers.createdAt))
+  return success(c, rows.map(publicAdmin))
+})
+
+app.post('/admins', async (c) => {
+  const admin = await requireSuperAdmin(c)
+  if (!admin) return c.json({ code: 403, message: '需要超级管理员权限' }, 403)
+  const body = await c.req.json().catch(() => ({}))
+  const username = typeof body.username === 'string' ? body.username.trim() : ''
+  const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
+  const password = typeof body.password === 'string' ? body.password : ''
+  const role = typeof body.role === 'string' && ADMIN_ROLES.has(body.role) ? body.role : 'admin'
+  const nickname = typeof body.nickname === 'string' ? body.nickname.trim().slice(0, 64) : ''
+  const email = typeof body.email === 'string' ? body.email.trim().slice(0, 128) : ''
+  const avatar = typeof body.avatar === 'string' ? body.avatar.trim().slice(0, 2048) : ''
+  if (!/^[A-Za-z0-9_-]{3,32}$/.test(username)) return badRequest(c, '账号需为 3-32 位英文、数字、下划线或横线')
+  if (!/^1[3-9]\d{9}$/.test(phone)) return badRequest(c, '请输入有效的 11 位手机号')
+  if (password.length < 8) return badRequest(c, '初始密码至少需要 8 位')
+  const [sameUsername] = await db.select({ id: schema.adminUsers.id }).from(schema.adminUsers).where(eq(schema.adminUsers.username, username))
+  if (sameUsername) return badRequest(c, '后台账号已存在')
+  const [samePhone] = await db.select({ id: schema.adminUsers.id }).from(schema.adminUsers).where(eq(schema.adminUsers.phone, phone))
+  if (samePhone) return badRequest(c, '手机号已被后台账号使用')
+  const ts = now()
+  const result = await db.insert(schema.adminUsers).values({
+    username,
+    phone,
+    nickname: nickname || username,
+    avatar,
+    email,
+    passwordHash: hashPassword(password),
+    role,
+    status: 'active',
+    createdAt: ts,
+    updatedAt: ts
+  })
+  const id = Number((Array.isArray(result) ? result[0] : result)?.insertId || 0)
+  await logAdminAction(admin.id, 'admin_create', 'admin_user', id || username, { username, phone, role })
+  const [createdAdmin] = await db.select().from(schema.adminUsers).where(eq(schema.adminUsers.username, username))
+  return success(c, publicAdmin(createdAdmin))
+})
+
+app.patch('/admins/:id', async (c) => {
+  const admin = await requireSuperAdmin(c)
+  if (!admin) return c.json({ code: 403, message: '需要超级管理员权限' }, 403)
+  const id = Number(c.req.param('id'))
+  if (!id) return badRequest(c, '管理员不存在')
+  const body = await c.req.json().catch(() => ({}))
+  const [target] = await db.select().from(schema.adminUsers).where(eq(schema.adminUsers.id, id))
+  if (!target) return c.json({ code: 404, message: '管理员不存在' }, 404)
+  const updates: Partial<typeof schema.adminUsers.$inferInsert> = { updatedAt: now() }
+  const detail: Record<string, unknown> = {}
+  if (typeof body.nickname === 'string') updates.nickname = body.nickname.trim().slice(0, 64)
+  if (typeof body.email === 'string') updates.email = body.email.trim().slice(0, 128)
+  if (typeof body.avatar === 'string') updates.avatar = body.avatar.trim().slice(0, 2048)
+  if (typeof body.role === 'string') {
+    if (!ADMIN_ROLES.has(body.role)) return badRequest(c, '角色仅支持 super_admin 或 admin')
+    if (id === admin.id && body.role !== 'super_admin') return badRequest(c, '不能降低自己的超管角色')
+    updates.role = body.role
+    detail.role = { from: target.role, to: body.role }
+  }
+  if (typeof body.status === 'string') {
+    if (!ADMIN_STATUSES.has(body.status)) return badRequest(c, '状态仅支持 active 或 disabled')
+    if (id === admin.id && body.status !== 'active') return badRequest(c, '不能停用自己的账号')
+    updates.status = body.status
+    detail.status = { from: target.status, to: body.status }
+  }
+  if (typeof body.password === 'string' && body.password) {
+    if (body.password.length < 8) return badRequest(c, '新密码至少需要 8 位')
+    updates.passwordHash = hashPassword(body.password)
+    detail.password = 'updated'
+  }
+  await db.update(schema.adminUsers).set(updates).where(eq(schema.adminUsers.id, id))
+  if (updates.passwordHash) await db.delete(schema.adminSessions).where(eq(schema.adminSessions.adminUserId, id))
+  await logAdminAction(admin.id, 'admin_update', 'admin_user', id, detail)
+  const [updatedAdmin] = await db.select().from(schema.adminUsers).where(eq(schema.adminUsers.id, id))
+  return success(c, publicAdmin(updatedAdmin))
+})
 
 app.get('/payment-settings', async (c) => {
   if (!await adminOnly(c)) return c.json({ code: 403, message: '需要管理员权限' }, 403)
@@ -28,17 +251,32 @@ app.get('/payment-settings', async (c) => {
 })
 
 app.put('/payment-settings', async (c) => {
-  const admin = await adminOnly(c)
-  if (!admin) return c.json({ code: 403, message: '需要管理员权限' }, 403)
+  const admin = await requireSuperAdmin(c)
+  if (!admin) return c.json({ code: 403, message: '需要超级管理员权限' }, 403)
   const body = await c.req.json().catch(() => ({}))
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+  if (!reason) return c.json({ code: 400, message: '修改支付渠道配置必须填写操作理由' }, 400)
+  const before: Record<string, any> = {}
+  const after: Record<string, any> = {}
   const changed: string[] = []
   for (const key of PAYMENT_SETTING_KEYS) {
     if (!(key in body) || (PAYMENT_SECRET_KEYS.has(key) && body[key] === 'configured')) continue
+    const oldValue = await getPlatformSetting(key)
     const value = PAYMENT_BOOLEAN_KEYS.has(key) ? (body[key] === false ? 'false' : 'true') : String(body[key] ?? '').trim()
-    await setPlatformSetting(key, value)
-    changed.push(key)
+    if (oldValue !== value) {
+      await setPlatformSetting(key, value)
+      changed.push(key)
+      if (PAYMENT_SECRET_KEYS.has(key)) {
+        before[key] = oldValue ? 'configured' : ''
+        after[key] = value ? 'configured' : ''
+      } else {
+        before[key] = PAYMENT_BOOLEAN_KEYS.has(key) ? oldValue !== 'false' : oldValue
+        after[key] = PAYMENT_BOOLEAN_KEYS.has(key) ? value !== 'false' : value
+      }
+    }
   }
-  await logAdminAction(admin.id, 'payment_settings_update', 'platform_settings', 'payment', { changed })
+  if (changed.length === 0) return success(c, { changed: [] })
+  await logAdminAction(admin.id, 'payment_settings_update', 'platform_settings', 'payment', { reason, changed, before, after })
   return success(c, { changed })
 })
 
@@ -61,7 +299,48 @@ app.get('/users', async (c) => {
     .leftJoin(schema.workspaces, eq(schema.workspaces.ownerUserId, schema.users.id))
     .leftJoin(schema.creditAccounts, eq(schema.creditAccounts.workspaceId, schema.workspaces.id))
     .orderBy(desc(schema.users.createdAt))
-  return success(c, rows.map(({ user, workspace, account }) => ({ ...user, workspace_name: workspace?.name || '', balance: account?.balance || 0, frozen: account?.frozen || 0 })).map(row => ({ ...row, password_hash: undefined })))
+
+  const userIds = rows.map(({ user }) => user.id).filter(Boolean)
+  const placeholders = userIds.length ? userIds.map(() => '?').join(',') : 'NULL'
+  const idParams = userIds.length ? userIds : []
+  type UserLastAtRow = RowDataPacket & { user_id: number; last_at: string }
+  const [taskRows, ledgerRows, orderRows] = await Promise.all([
+    pool.query<UserLastAtRow[]>(
+      `SELECT credit_user_id AS user_id, MAX(updated_at) AS last_at FROM sys_task WHERE credit_user_id IN (${placeholders}) GROUP BY credit_user_id`,
+      idParams
+    ),
+    pool.query<UserLastAtRow[]>(
+      `SELECT user_id, MAX(created_at) AS last_at FROM credit_ledger WHERE user_id IN (${placeholders}) GROUP BY user_id`,
+      idParams
+    ),
+    pool.query<UserLastAtRow[]>(
+      `SELECT user_id, MAX(updated_at) AS last_at FROM recharge_orders WHERE user_id IN (${placeholders}) GROUP BY user_id`,
+      idParams
+    ),
+  ])
+
+  const maxByUser = new Map<number, string>()
+  const consider = (userId: number | null | undefined, at: string | null | undefined) => {
+    if (!userId || !at) return
+    const cur = maxByUser.get(userId)
+    if (!cur || at > cur) maxByUser.set(userId, at)
+  }
+  ;[taskRows[0], ledgerRows[0], orderRows[0]].forEach(list =>
+    list.forEach(r => consider(r.user_id, r.last_at))
+  )
+
+  return success(c, rows.map(({ user, account }) => {
+    const lastActiveAt = maxByUser.get(user.id) || user.updatedAt
+    return {
+      ...user,
+      balance: account?.balance || 0,
+      frozen: account?.frozen || 0,
+      created_at: user.createdAt,
+      updated_at: user.updatedAt,
+      last_active_at: lastActiveAt,
+      password_hash: undefined
+    }
+  }))
 })
 
 app.get('/workspaces', async (c) => {
@@ -83,10 +362,14 @@ app.patch('/workspaces/:id/status', async (c) => {
   const id = Number(c.req.param('id'))
   const body = await c.req.json().catch(() => ({}))
   if (!['active', 'disabled'].includes(body.status)) return c.json({ code: 400, message: 'status 仅支持 active 或 disabled' }, 400)
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+  if (!reason) return c.json({ code: 400, message: '变更工作区状态必须填写操作理由' }, 400)
   const [workspace] = await db.select().from(schema.workspaces).where(eq(schema.workspaces.id, id))
   if (!workspace) return c.json({ code: 404, message: '工作区不存在' }, 404)
+  if (workspace.status === body.status) return c.json({ code: 400, message: `工作区已经是 ${body.status} 状态` }, 400)
+  const oldStatus = workspace.status
   await db.update(schema.workspaces).set({ status: body.status, updatedAt: new Date().toISOString() }).where(eq(schema.workspaces.id, id))
-  await logAdminAction(admin.id, 'workspace_status_update', 'workspace', id, { status: body.status })
+  await logAdminAction(admin.id, 'workspace_status_update', 'workspace', id, { reason, old_status: oldStatus, new_status: body.status })
   return success(c, { id, status: body.status })
 })
 
@@ -96,10 +379,14 @@ app.patch('/users/:id/status', async (c) => {
   const userId = Number(c.req.param('id'))
   const body = await c.req.json().catch(() => ({}))
   if (!['active', 'disabled'].includes(body.status)) return c.json({ code: 400, message: 'status 仅支持 active 或 disabled' }, 400)
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+  if (!reason) return c.json({ code: 400, message: '变更用户状态必须填写操作理由' }, 400)
   const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId))
   if (!user) return c.json({ code: 404, message: '用户不存在' }, 404)
+  if (user.status === body.status) return c.json({ code: 400, message: `用户已经是 ${body.status} 状态` }, 400)
+  const oldStatus = user.status
   await db.update(schema.users).set({ status: body.status, updatedAt: new Date().toISOString() }).where(eq(schema.users.id, userId))
-  await logAdminAction(admin.id, 'user_status_update', 'user', userId, { status: body.status })
+  await logAdminAction(admin.id, 'user_status_update', 'user', userId, { reason, old_status: oldStatus, new_status: body.status })
   return success(c, { id: userId, status: body.status })
 })
 
@@ -128,28 +415,31 @@ app.get('/tasks', async (c) => {
     .orderBy(desc(schema.sysTask.createdAt))
   if (type) rows = rows.filter(row => row.task.type === type)
   if (status) rows = rows.filter(row => row.task.status === status)
+  const nameMap = await resolveTaskNames(rows.slice(0, 500).map(r => r.task))
   return success(c, rows.slice(0, 500).map(({ task: row, user }) => {
     let params = null
     try { params = row.params ? JSON.parse(row.params) : null } catch { params = null }
-    const taskName = row.type === 'text'
-      ? params?.agent_type === 'script_rewriter' ? '剧本改写'
-        : params?.target ? `资产提取 · ${params.target === 'characters' ? '角色' : params.target === 'scenes' ? '场景' : params.target === 'props' ? '道具' : params.target}`
-        : '文本生成'
-      : row.type === 'image' ? '图片生成' : row.type === 'video' ? '视频生成' : row.type
+    const taskName = nameMap.get(row.id)
+      || (row.type === 'image' ? '图片生成' : row.type === 'video' ? '视频生成' : row.type)
     return { ...toSnakeCase(row), params, task_name: taskName, user_phone: user?.phone || '', user_nickname: user?.nickname || (user?.phone ? `万影用户${user.phone.slice(-4)}` : '') }
   }))
 })
 
+// 应急通道：管理后台「生成任务」页已移除取消 / 重试入口，这两个接口仅供人工排查（如任务卡在
+// processing 导致积分长期冻结）时通过脚本调用。调用即写审计日志，且必须填写操作理由。
 app.post('/tasks/:id/cancel', async (c) => {
   const admin = await adminOnly(c)
   if (!admin) return c.json({ code: 403, message: '需要管理员权限' }, 403)
   const id = Number(c.req.param('id'))
+  const body = await c.req.json().catch(() => ({}))
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+  if (!reason) return c.json({ code: 400, message: '取消任务必须填写操作理由' }, 400)
   const [task] = await db.select().from(schema.sysTask).where(eq(schema.sysTask.id, id))
   if (!task) return c.json({ code: 404, message: '任务不存在' }, 404)
   if (task.status !== 'processing') return c.json({ code: 400, message: '只有处理中的任务可以取消' }, 400)
   await settleCredits(id, false)
-  await db.update(schema.sysTask).set({ status: 'cancelled', errorMsg: '管理员取消任务', updatedAt: new Date().toISOString() }).where(eq(schema.sysTask.id, id))
-  await logAdminAction(admin.id, 'task_cancel', 'sys_task', id, { credit_status: task.creditStatus, credit_cost: task.creditCost })
+  await db.update(schema.sysTask).set({ status: 'cancelled', errorMsg: `管理员取消任务：${reason}`, updatedAt: new Date().toISOString() }).where(eq(schema.sysTask.id, id))
+  await logAdminAction(admin.id, 'task_cancel', 'sys_task', id, { reason, old_status: task.status, new_status: 'cancelled', credit_status: task.creditStatus, credit_cost: task.creditCost })
   return success(c, { id, status: 'cancelled' })
 })
 
@@ -157,6 +447,10 @@ app.post('/tasks/:id/retry', async (c) => {
   const admin = await adminOnly(c)
   if (!admin) return c.json({ code: 403, message: '需要管理员权限' }, 403)
   const id = Number(c.req.param('id'))
+  const body = await c.req.json().catch(() => ({}))
+  // 重试会按当前价格重新扣除用户积分，风险高于取消，同样强制留痕
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+  if (!reason) return c.json({ code: 400, message: '重试任务必须填写操作理由' }, 400)
   const [task] = await db.select().from(schema.sysTask).where(eq(schema.sysTask.id, id))
   if (!task) return c.json({ code: 404, message: '任务不存在' }, 404)
   if (task.status !== 'failed' && task.status !== 'cancelled') return c.json({ code: 400, message: '只有失败或已取消任务可以重试' }, 400)
@@ -175,7 +469,7 @@ app.post('/tasks/:id/retry', async (c) => {
     const newId = task.type === 'video'
       ? await generateVideo({ storyboardId: task.storyboardId || undefined, dramaId: task.dramaId || undefined, prompt: task.prompt || '', model: task.model || undefined, referenceMode: params.referenceMode || 'reference', referenceImageUrls: params.referenceImageUrls, referenceVideoUrls: params.referenceVideoUrls, referenceAudioUrls: params.referenceAudioUrls, generateAudio: params.generateAudio !== 0, duration: params.duration, aspectRatio: params.aspectRatio, resolution: params.resolution, configId, credit: { workspaceId: task.creditWorkspaceId, userId: task.creditUserId, cost } })
       : await generateImage({ storyboardId: task.storyboardId || undefined, dramaId: task.dramaId || undefined, sceneId: task.sceneId || undefined, characterId: task.characterId || undefined, propId: task.propId || undefined, prompt: task.prompt || '', model: task.model || undefined, size: params.size, referenceImages: params.referenceImages, frameType: params.frameType, configId, credit: { workspaceId: task.creditWorkspaceId, userId: task.creditUserId, cost } })
-    await logAdminAction(admin.id, 'task_retry', 'sys_task', id, { new_task_id: newId, credit_cost: cost, action: costAction })
+    await logAdminAction(admin.id, 'task_retry', 'sys_task', id, { reason, old_status: task.status, new_task_id: newId, credit_cost: cost, action: costAction })
     return success(c, { task_id: newId, credit_cost: cost })
   } catch (error: any) { return badRequest(c, error.message || '任务重试失败') }
 })
@@ -218,6 +512,7 @@ app.get('/audit-logs', async (c) => {
     return {
       ...toSnakeCase(log),
       detail,
+      admin_username: admin.username,
       admin_phone: admin.phone,
       user_phone: user?.phone || '',
       user_nickname: user?.nickname || (user?.phone ? `万影用户${user.phone.slice(-4)}` : ''),
@@ -228,9 +523,12 @@ app.get('/audit-logs', async (c) => {
 })
 
 app.post('/orders/:orderNo/refund', async (c) => {
-  const admin = await adminOnly(c)
-  if (!admin) return c.json({ code: 403, message: '需要管理员权限' }, 403)
+  const admin = await requireSuperAdmin(c)
+  if (!admin) return c.json({ code: 403, message: '需要超级管理员权限' }, 403)
   const orderNo = c.req.param('orderNo')
+  const body = await c.req.json().catch(() => ({}))
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+  if (!reason) return c.json({ code: 400, message: '退款必须填写操作理由' }, 400)
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
@@ -246,7 +544,7 @@ app.post('/orders/:orderNo/refund', async (c) => {
     await connection.query('INSERT INTO credit_ledger (workspace_id, user_id, type, amount, balance_after, reference_type, reference_id, note, idempotency_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [order.workspace_id, admin.id, 'recharge_refund', -order.credits, balanceAfter, 'recharge_order', orderNo, `充值退款 ${order.credits} 积分`, `recharge_refund:${orderNo}`, ts])
     await connection.query('UPDATE recharge_orders SET status = \'refunded\', updated_at = ? WHERE order_no = ?', [ts, orderNo])
     await connection.commit()
-    await logAdminAction(admin.id, 'recharge_refund', 'recharge_order', orderNo, { credits: order.credits, balance: balanceAfter })
+    await logAdminAction(admin.id, 'recharge_refund', 'recharge_order', orderNo, { reason, credits: order.credits, old_balance: accounts[0]?.balance, new_balance: balanceAfter })
     return success(c, { order_no: orderNo, status: 'refunded', balance: balanceAfter })
   } catch (error: any) { await connection.rollback(); return badRequest(c, error.message || '退款失败') } finally { connection.release() }
 })
@@ -258,12 +556,14 @@ app.post('/users/:id/credits', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const amount = Math.trunc(Number(body.amount))
   const note = typeof body.note === 'string' ? body.note.trim() : ''
-  if (!amount || !note) return c.json({ code: 400, message: 'amount 和 note 为必填项' }, 400)
+  if (!amount || !note) return c.json({ code: 400, message: '请填写调整积分和操作备注' }, 400)
   const [workspace] = await db.select().from(schema.workspaces).where(eq(schema.workspaces.ownerUserId, userId))
-  if (!workspace) return c.json({ code: 404, message: '用户工作区不存在' }, 404)
+  if (!workspace) return c.json({ code: 404, message: '用户积分账户不存在' }, 404)
+  const [account] = await db.select().from(schema.creditAccounts).where(eq(schema.creditAccounts.workspaceId, workspace.id))
+  const oldBalance = account?.balance || 0
   const balance = await adjustCredits(workspace.id, admin.id, amount, note)
-  await logAdminAction(admin.id, 'credit_adjust', 'workspace', workspace.id, { user_id: userId, amount, note, balance })
-  return success(c, { workspace_id: workspace.id, balance })
+  await logAdminAction(admin.id, 'credit_adjust', 'user', userId, { amount, note, old_balance: oldBalance, new_balance: balance })
+  return success(c, { user_id: userId, balance })
 })
 
 type SqlRow = Record<string, any>

@@ -11,7 +11,7 @@
       <form @submit.prevent="submit" class="auth-form">
         <div class="field">
           <label for="phone">手机号</label>
-          <input id="phone" v-model.trim="phone" class="input" type="tel" autocomplete="tel" placeholder="请输入手机号" required />
+          <input id="phone" v-model.trim="phone" class="input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="请输入手机号" :pattern="registerMode && !resetMode ? '^1[3-9]\\d{9}$' : undefined" :title="registerMode && !resetMode ? '请输入有效的 11 位手机号' : undefined" required />
         </div>
 
         <template v-if="resetMode">
@@ -53,7 +53,7 @@
 
 <script setup>
 definePageMeta({ layout: false })
-import brandLogo from '~/assets/huobao-logo.png'
+import brandLogo from '~/assets/logo.svg'
 import loginBackground from '~/assets/wanying-login-bg.png'
 const { user, loading, signIn, resetPassword, requestPasswordReset } = useAuth()
 const phone = ref('')
@@ -64,19 +64,25 @@ const resetMode = ref(false)
 const resetCode = ref('')
 const codeMessage = ref('')
 const route = useRoute()
+const mainlandPhonePattern = /^1[3-9]\d{9}$/
 
-if (user.value) navigateTo('/')
+if (user.value) await navigateTo('/')
 
 async function submit() {
   error.value = ''
+  const normalizedPhone = phone.value.trim()
+  if (registerMode.value && !resetMode.value && !mainlandPhonePattern.test(normalizedPhone)) {
+    error.value = '请输入有效的 11 位手机号'
+    return
+  }
   try {
-    if (resetMode.value) await resetPassword(phone.value, resetCode.value, password.value)
-    else await signIn(phone.value, password.value, registerMode.value)
+    if (resetMode.value) await resetPassword(normalizedPhone, resetCode.value, password.value)
+    else await signIn(normalizedPhone, password.value, registerMode.value)
     await navigateTo(typeof route.query.redirect === 'string' ? route.query.redirect : '/')
   } catch (e) { error.value = e.message || '操作失败，请稍后重试' }
 }
 async function sendResetCode() {
-  try { const result = await requestPasswordReset(phone.value); codeMessage.value = result.debug_code ? `开发环境验证码：${result.debug_code}` : '验证码已发送，请查收短信' } catch (e) { codeMessage.value = e.message || '验证码发送失败' }
+  try { const result = await requestPasswordReset(phone.value.trim()); codeMessage.value = result.debug_code ? `开发环境验证码：${result.debug_code}` : '验证码已发送，请查收短信' } catch (e) { codeMessage.value = e.message || '验证码发送失败' }
 }
 </script>
 
@@ -111,8 +117,11 @@ async function sendResetCode() {
 .auth-logo {
   width: 68px;
   height: 68px;
+  box-sizing: border-box;
+  padding: 20px;
   border-radius: 16px;
   margin-bottom: 14px;
+  background: var(--text-0, #1d1d1f);
   object-fit: contain;
   box-shadow: 0 2px 10px rgba(0, 0, 0, .07);
 }

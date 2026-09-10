@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono'
+import { friendlyErrorMessage } from '../utils/friendly-error.js'
 
 const colors = {
   reset: '\x1b[0m',
@@ -63,6 +64,6 @@ export const errorHandler: MiddlewareHandler = async (c, next) => {
     const status = err.status || 500
     console.error(`${colors.red}[ERROR]${colors.reset} ${c.req.method} ${c.req.path}`)
     console.error(err.stack || err.message || err)
-    return c.json({ code: status, message: err.message || 'Internal Server Error' }, status)
+    return c.json({ code: status, message: friendlyErrorMessage(err.message || String(status)) }, status)
   }
 }

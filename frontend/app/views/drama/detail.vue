@@ -710,7 +710,11 @@ function tagClass(kindKey) {
 function tabLabel(v) { return assetTabs.find(t => t.value === v)?.label || '' }
 const pricingRules = ref([])
 const defaultPrices = { character_image: 8, scene_image: 6, prop_image: 5 }
-function priceFor(action) { return pricingRules.value.find(row => row.action === action && row.is_active !== false)?.price ?? defaultPrices[action] ?? 0 }
+function priceFor(action) {
+  const rule = pricingRules.value.find(row => row.action === action)
+  if (rule) return rule.is_active === false ? 0 : rule.price
+  return defaultPrices[action] ?? 0
+}
 function materialPrice(m) {
   return priceFor(m?.kindKey === 'character' ? 'character_image' : m?.kindKey === 'scene' ? 'scene_image' : 'prop_image')
 }

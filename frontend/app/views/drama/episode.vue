@@ -47,7 +47,7 @@
           />
         </div>
         <div class="studio-actions">
-          <NuxtLink to="/credits" class="studio-credit-chip" title="查看积分余额">
+          <NuxtLink to="/credits" class="studio-credit-chip" :title="studioCreditTitle">
             <span>✦</span>{{ studioCreditBalance }}
           </NuxtLink>
           <button class="btn" @click="refresh">
@@ -240,15 +240,15 @@
                 <span class="asset-bar-divider" />
                 <button class="btn btn-sm asset-btn-batch" @click="batchCharImages">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  批量角色 <span class="credit-cost">✦ {{ chars.length * priceFor('character_image') }}</span>
+                  批量角色 <span class="credit-cost">✦ {{ batchCharacterImagePrice }}</span>
                 </button>
                 <button class="btn btn-sm asset-btn-batch" @click="batchSceneImages">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  批量场景 <span class="credit-cost">✦ {{ scenes.length * priceFor('scene_image') }}</span>
+                  批量场景 <span class="credit-cost">✦ {{ batchSceneImagePrice }}</span>
                 </button>
                 <button class="btn btn-sm asset-btn-batch" @click="batchPropImages">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  批量道具 <span class="credit-cost">✦ {{ propItems.length * priceFor('prop_image') }}</span>
+                  批量道具 <span class="credit-cost">✦ {{ batchPropImagePrice }}</span>
                 </button>
               </div>
             </div>
@@ -468,7 +468,7 @@
                 <button class="btn btn-sm" :disabled="videoPromptBatch.running || !sbs.length" @click="batchVideoPrompts">
                   <Loader2 v-if="videoPromptBatch.running" :size="11" class="animate-spin" />
                   <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                  {{ videoPromptBatch.running ? `提示词 ${videoPromptBatch.completed}/${videoPromptBatch.total}` : (selectedSbIds.length ? `生成所选提示词(${selectedSbIds.length})` : '批量视频提示词') }} <span v-if="!videoPromptBatch.running" class="credit-cost">✦ {{ (selectedSbIds.length || sbs.length) * priceFor('video_prompt') }}</span>
+                  {{ videoPromptBatch.running ? `提示词 ${videoPromptBatch.completed}/${videoPromptBatch.total}` : (selectedSbIds.length ? `生成所选提示词(${selectedSbIds.length})` : '批量视频提示词') }} <span v-if="!videoPromptBatch.running" class="credit-cost">✦ {{ videoPromptBatchPrice }}</span>
                 </button>
               </div>
             </div>
@@ -702,7 +702,7 @@
                 <button class="btn btn-sm" :disabled="videoPromptBatch.running || !sbs.length" @click="batchVideoPrompts">
                   <Loader2 v-if="videoPromptBatch.running" :size="11" class="animate-spin" />
                   <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                  {{ videoPromptBatch.running ? `提示词 ${videoPromptBatch.completed}/${videoPromptBatch.total}` : (selectedSbIds.length ? `生成所选提示词(${selectedSbIds.length})` : '批量视频提示词') }} <span v-if="!videoPromptBatch.running" class="credit-cost">✦ {{ (selectedSbIds.length || sbs.length) * priceFor('video_prompt') }}</span>
+                  {{ videoPromptBatch.running ? `提示词 ${videoPromptBatch.completed}/${videoPromptBatch.total}` : (selectedSbIds.length ? `生成所选提示词(${selectedSbIds.length})` : '批量视频提示词') }} <span v-if="!videoPromptBatch.running" class="credit-cost">✦ {{ videoPromptBatchPrice }}</span>
                 </button>
                 <button class="btn btn-sm" :disabled="!sbs.length" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
@@ -785,7 +785,7 @@
                     @click.stop="genVid(task.storyboard)"
                   >
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                    {{ videoTaskActionLabel(task.storyboard) }} <span class="credit-cost">✦ {{ videoPriceForDuration(task.duration || task.storyboard?.duration || videoDuration) }}</span>
+                    {{ videoTaskActionLabel(task.storyboard) }} <span class="credit-cost">✦ {{ videoPriceForDuration(videoDurationForStoryboard(task.storyboard)) }}</span>
                   </button>
                 </div>
                 </div>
@@ -840,7 +840,7 @@
                       style="margin-top:4px"
                       @click="genVid(selectedSb)"
                     >
-                  生成视频 <span class="credit-cost">✦ {{ priceFor('video') * videoDuration }}</span>
+                  生成视频 <span class="credit-cost">✦ {{ currentVideoPrice }}</span>
                     </button>
                   </div>
                 </div>
@@ -1145,7 +1145,7 @@
                   playsinline
                 />
                 <img
-                  v-else-if="row.previewUrl"
+                  v-else-if="row.previewUrl && row.kind !== 'text'"
                   :src="thumbOf(genTaskPreviewSrc(row.previewUrl))"
                   :alt="row.targetLabel"
                   loading="lazy"
@@ -1167,10 +1167,18 @@
                   <strong class="video-task-name truncate">{{ row.targetLabel }}</strong>
                 </div>
                 <div class="video-task-meta-line">
-                  <span class="video-task-loc truncate">{{ row.provider }}{{ row.model ? ' · ' + row.model : '' }}</span>
+                  <span v-if="genTaskTimeLabel(row)" class="video-task-loc truncate">{{ genTaskTimeLabel(row) }}</span>
+                  <template v-if="row.model">
+                    <span class="video-task-sep">·</span>
+                    <span class="video-task-loc truncate">{{ row.model }}</span>
+                  </template>
                   <template v-if="genTaskDuration(row)">
                     <span class="video-task-sep">·</span>
                     <span>耗时 {{ genTaskDuration(row) }}</span>
+                  </template>
+                  <template v-if="genTaskCreditText(row)">
+                    <span class="video-task-sep">·</span>
+                    <span>{{ genTaskCreditText(row) }}</span>
                   </template>
                   <span class="video-task-sep">·</span>
                   <span>#{{ row.id }}</span>
@@ -1435,6 +1443,7 @@
                 @click="genCharImg(assetDetail.item.id)"
               >
                 {{ assetImageSrc(assetDetail.item) ? '重绘形象' : (isPendingCharImage(assetDetail.item.id) ? '生成中' : '生成形象') }}
+                <span v-if="!isPendingCharImage(assetDetail.item.id)" class="credit-cost">✦ {{ priceFor('character_image') }}</span>
               </button>
               <button
                 v-else-if="assetDetail.type === 'scene'"
@@ -1443,6 +1452,7 @@
                 @click="genSceneImg(assetDetail.item.id)"
               >
                 {{ assetImageSrc(assetDetail.item) ? '重绘场景' : (isPendingSceneImage(assetDetail.item.id) ? '生成中' : '生成场景') }}
+                <span v-if="!isPendingSceneImage(assetDetail.item.id)" class="credit-cost">✦ {{ priceFor('scene_image') }}</span>
               </button>
               <button
                 v-else-if="assetDetail.type === 'prop'"
@@ -1451,6 +1461,7 @@
                 @click="genPropImg(assetDetail.item.id)"
               >
                 {{ assetImageSrc(assetDetail.item) ? '重绘道具图' : (isPendingPropImage(assetDetail.item.id) ? '生成中' : '生成道具图') }}
+                <span v-if="!isPendingPropImage(assetDetail.item.id)" class="credit-cost">✦ {{ priceFor('prop_image') }}</span>
               </button>
               <button class="btn btn-primary" :disabled="savingAssetDetail" @click="saveAssetDetail">
                 <Loader2 v-if="savingAssetDetail" :size="12" class="animate-spin" />
@@ -1581,7 +1592,7 @@ const storedPanel = (() => {
 // 首个 refresh 时若已恢复面板位置，跳过按内容自动重置 scriptStep
 let panelRestored = !!storedPanel
 const panel = ref(['production', 'export'].includes(storedPanel?.panel) ? storedPanel.panel : 'script')
-const { running: rn, runningType: rt, run: runAgent } = useAgent()
+const { running: rn, runningType: rt, run: runAgent, sync: syncAgent } = useAgent()
 
 const localRaw = ref(''), localScript = ref('')
 const rawContent = computed(() => episode.value?.content || '')
@@ -1640,7 +1651,20 @@ const imageConfigs = ref([])
 const videoConfigs = ref([])
 const textConfigs = ref([])
 const pricingRules = ref([])
+const videoPromptBatch = ref({ running: false, total: 0, completed: 0 })
+// 单个视频提示词生成：按分镜 ID 跟踪，允许不同分镜并行生成（不走全局 rn 锁）
+const videoPromptGeneratingIds = ref([])
+// 分镜勾选：勾选后批量生成只处理所选（已有提示词也会重新生成）；未勾选时处理全部缺失
+const selectedSbIds = ref([])
+// 多选模式：进入后点击卡片=勾选/取消，底部操作条确认生成
+const sbSelectMode = ref(false)
 const studioCreditBalance = ref('--')
+const studioCreditFrozen = ref(0)
+const studioCreditTitle = computed(() =>
+  studioCreditBalance.value === '--'
+    ? '查看积分余额'
+    : `可用积分 ${studioCreditBalance.value}${studioCreditFrozen.value ? ` · 冻结中 ${studioCreditFrozen.value}` : ''}`
+)
 const fallbackPricing = Object.fromEntries([
   ['script_rewrite', 2], ['asset_extract', 2], ['storyboard_break', 3],
   ['character_prompt', 1], ['scene_prompt', 1], ['prop_prompt', 1],
@@ -1648,27 +1672,56 @@ const fallbackPricing = Object.fromEntries([
   ['prop_image', 5], ['video', 5],  // 5 credits per second
 ])
 function priceFor(action) {
-  const rule = pricingRules.value.find(r => r.action === action && r.is_active !== false)
-  return rule?.price ?? fallbackPricing[action] ?? 0
+  const rule = pricingRules.value.find(r => r.action === action)
+  if (rule) return rule.is_active === false ? 0 : rule.price
+  return fallbackPricing[action] ?? 0
 }
+const videoPromptTargetCount = computed(() =>
+  selectedSbIds.value.length
+    ? selectedSbIds.value.length
+    : sbs.value.filter(sb => !((sb.video_prompt || sb.videoPrompt || '').trim())).length
+)
+const videoPromptBatchPrice = computed(() => videoPromptTargetCount.value * priceFor('video_prompt'))
 function videoPriceForDuration(value) {
   const duration = Number(value || 10)
-  return priceFor('video') * duration  // Price per second * number of seconds
+  return priceFor('video') * duration
 }
-const batchVideoPrice = computed(() => sbs.value.reduce((sum, sb) => sum + videoPriceForDuration(sb.duration || videoDuration.value), 0))
+function videoDurationForStoryboard(sb) {
+  if (!sb) return Number(videoDuration.value || 10)
+  return selectedSb.value?.id === sb.id
+    ? Number(videoDuration.value || sb.duration || 10)
+    : Number(sb.duration || 10)
+}
+const pendingVideoStoryboards = computed(() => sbs.value.filter(s => !hasVid(s) && !isPendingVideo(s.id)))
+const batchVideoPrice = computed(() => pendingVideoStoryboards.value.reduce((sum, sb) => sum + videoPriceForDuration(videoDurationForStoryboard(sb)), 0))
 const currentVideoPrice = computed(() => {
-  return videoPriceForDuration(videoDuration.value)
+  return videoPriceForDuration(videoDurationForStoryboard(selectedSb.value))
 })
+const pendingCharacterImageTargets = computed(() => visualChars.value.filter(c => !(c.image_url || c.imageUrl) && !isPendingCharImage(c.id)))
+const pendingSceneImageTargets = computed(() => scenes.value.filter(s => !(s.image_url || s.imageUrl) && !isPendingSceneImage(s.id)))
+const pendingPropImageTargets = computed(() => propItems.value.filter(p => !(p.image_url || p.imageUrl) && !isPendingPropImage(p.id)))
+const batchCharacterImagePrice = computed(() => pendingCharacterImageTargets.value.length * priceFor('character_image'))
+const batchSceneImagePrice = computed(() => pendingSceneImageTargets.value.length * priceFor('scene_image'))
+const batchPropImagePrice = computed(() => pendingPropImageTargets.value.length * priceFor('prop_image'))
+async function loadStudioCredits() {
+  try {
+    const accounts = await api.get('/credits')
+    studioCreditBalance.value = accounts?.[0]?.balance ?? 0
+    studioCreditFrozen.value = accounts?.[0]?.frozen ?? 0
+  } catch {
+    studioCreditBalance.value = '--'
+    studioCreditFrozen.value = 0
+  }
+}
+function refreshStudioCreditsSoon() {
+  loadStudioCredits()
+  ;[800, 1800, 4000].forEach(delay => setTimeout(loadStudioCredits, delay))
+}
 async function loadPricing() {
   try { pricingRules.value = await api.get('/pricing') || [] } catch { /* 价格读取失败时显示首版默认价 */ }
 }
 onMounted(loadPricing)
-onMounted(async () => {
-  try {
-    const accounts = await api.get('/credits')
-    studioCreditBalance.value = accounts?.[0]?.balance ?? 0
-  } catch { studioCreditBalance.value = '--' }
-})
+onMounted(loadStudioCredits)
 // 生成时可选模型：空串 = 跟随配置默认（models[0]）；选择持久化到 localStorage，刷新页面后保留
 const MODEL_STORE_KEYS = { chat: 'huobao:model:chat', image: 'huobao:model:image', video: 'huobao:model:video' }
 function readStoredModel(key, legacyKey = '') {
@@ -1706,6 +1759,10 @@ function openTaskDrawer() {
 }
 function closeTaskDrawer() {
   taskDrawer.value = false
+}
+function refreshGenTasksSoon() {
+  setTimeout(loadGenTasks, 300)
+  setTimeout(loadGenTasks, 1500)
 }
 // Seedance 2.0 视频生成面板：仅多模态参考（参考图 0-9 + 参考视频 0-3 + 参考音频 0-3 + 可选文本）
 const videoRefVideoUrls = ref([])
@@ -1866,6 +1923,7 @@ async function ensureAssetPrompt(type, id, force = false) {
   const key = `${type}:${id}`
   if (generatingPromptKeys.value.includes(key)) return ''
   generatingPromptKeys.value.push(key)
+  refreshStudioCreditsSoon()
   try {
     const res = type === 'character'
       ? await characterAPI.generatePrompt(id, epId.value, force, chatModelOverride(), chatConfigId())
@@ -1874,6 +1932,7 @@ async function ensureAssetPrompt(type, id, force = false) {
         : await propAPI.generatePrompt(id, epId.value, force, chatModelOverride(), chatConfigId())
     const fp = res?.final_prompt || res?.finalPrompt || ''
     if (fp) applyFinalPrompt(type, id, fp)
+    await loadStudioCredits()
     return fp
   } finally {
     generatingPromptKeys.value = generatingPromptKeys.value.filter(k => k !== key)
@@ -2168,6 +2227,37 @@ async function loadGenTasks() {
     }
     pendingVideoIds.value = [...pending]
     failedVideoMessages.value = failed
+
+    // 图片生成同理:pending 状态只存内存,刷新后从 sys_task 的 processing 记录恢复
+    // (角色/场景/道具各自取最新一条任务,旧任务不干预当前状态;完成后/失败后自动清除)
+    const latestByAsset = new Map()
+    for (const t of genTasks.value) {
+      if (t.type !== 'image') continue
+      const key = t.character_id ? `c:${t.character_id}` : t.scene_id ? `s:${t.scene_id}` : t.prop_id ? `p:${t.prop_id}` : ''
+      if (!key) continue
+      const prev = latestByAsset.get(key)
+      if (!prev
+        || String(t.created_at || '') > String(prev.created_at || '')
+        || (String(t.created_at || '') === String(prev.created_at || '') && t.id > prev.id)) {
+        latestByAsset.set(key, t)
+      }
+    }
+    const pendChar = new Set()
+    const pendScene = new Set()
+    const pendProp = new Set()
+    for (const [key, t] of latestByAsset) {
+      if (t.status !== 'processing') continue
+      if (key.startsWith('c:')) pendChar.add(Number(key.slice(2)))
+      else if (key.startsWith('s:')) pendScene.add(Number(key.slice(2)))
+      else pendProp.add(Number(key.slice(2)))
+    }
+    // 刚点击提交、任务记录尚未加载出来的本地状态保留
+    for (const id of pendingCharImageIds.value) if (!latestByAsset.has(`c:${id}`)) pendChar.add(id)
+    for (const id of pendingSceneImageIds.value) if (!latestByAsset.has(`s:${id}`)) pendScene.add(id)
+    for (const id of pendingPropImageIds.value) if (!latestByAsset.has(`p:${id}`)) pendProp.add(id)
+    pendingCharImageIds.value = [...pendChar]
+    pendingSceneImageIds.value = [...pendScene]
+    pendingPropImageIds.value = [...pendProp]
   } catch { /* 静默失败,不打断其他刷新 */ }
 }
 
@@ -2175,10 +2265,18 @@ function stopGenTasksPolling() {
   if (genTasksTimer) { clearInterval(genTasksTimer); genTasksTimer = null }
 }
 
-const genTaskActiveCount = computed(() =>
-  genTasks.value.filter(t => t.status === 'processing').length +
-  genMerges.value.filter(m => m.status === 'processing' || m.status === 'pending').length
-)
+const activeAgentTaskVisible = computed(() => {
+  if (!rn.value || !rt.value) return false
+  return genTasks.value.some(t => t.type === 'text' && t.provider === rt.value && t.status === 'processing')
+})
+const genTaskActiveCount = computed(() => {
+  const activeTasks =
+    genTasks.value.filter(t => t.status === 'processing').length +
+    genMerges.value.filter(m => m.status === 'processing' || m.status === 'pending').length
+  const visibleVideoPromptTasks = genTasks.value.filter(t => t.type === 'text' && t.provider === 'prompt_generator' && t.status === 'processing').length
+  const localVideoPromptTasks = Math.max(0, videoPromptGeneratingIds.value.length - visibleVideoPromptTasks)
+  return activeTasks + localVideoPromptTasks + (rn.value && !activeAgentTaskVisible.value ? 1 : 0)
+})
 const genTaskDoneCount = computed(() =>
   genTasks.value.filter(t => t.status === 'completed').length +
   genMerges.value.filter(m => m.status === 'completed').length
@@ -2209,10 +2307,18 @@ function genTaskTargetLabel(t) {
   return '通用'
 }
 
+// 资产提取按 target 拆成独立任务（角色/场景/道具可并行），名称带括号区分
+const EXTRACT_TARGET_NAMES = { characters: '角色', scenes: '场景', props: '道具' }
+
 function genTaskTextLabel(t) {
+  if (t.provider === 'extractor') {
+    let target = ''
+    try { target = JSON.parse(t.params || '{}').target || '' } catch {}
+    const name = EXTRACT_TARGET_NAMES[target]
+    return name ? `资产提取（${name}）` : '资产提取'
+  }
   const labels = {
     script_rewriter: '剧本改写',
-    extractor: '资产提取',
     storyboard_breaker: '分镜拆解',
     prompt_generator: '提示词生成',
   }
@@ -2232,6 +2338,8 @@ const genTaskRows = computed(() => {
     errorMsg: friendlyErrorMessage(t.error_msg || '', ''),
     previewUrl: t.local_path || t.result_url || '',
     prompt: t.prompt || '',
+    creditCost: t.credit_cost ?? t.creditCost ?? 0,
+    creditStatus: t.credit_status || t.creditStatus || 'none',
     createdAt: t.created_at || '',
     completedAt: t.completed_at || '',
   }))
@@ -2246,6 +2354,8 @@ const genTaskRows = computed(() => {
     errorMsg: friendlyErrorMessage(m.error_msg || '', ''),
     previewUrl: m.merged_url || '',
     prompt: '',
+    creditCost: 0,
+    creditStatus: 'none',
     createdAt: m.created_at || '',
     completedAt: m.completed_at || '',
   }))
@@ -2266,6 +2376,15 @@ function genTaskStatusLabel(status) {
   return '生成中'
 }
 
+function genTaskCreditText(row) {
+  const cost = Number(row?.creditCost || 0)
+  if (!cost) return ''
+  if (row.creditStatus === 'settled' || row.creditStatus === 'charged') return `已扣 ✦ ${cost}`
+  if (row.creditStatus === 'frozen' || row.creditStatus === 'pending') return `冻结 ✦ ${cost}`
+  if (row.creditStatus === 'refunded') return `已退 ✦ ${cost}`
+  return `预计 ✦ ${cost}`
+}
+
 // 映射到现有 video-task-status 的样式类:is-done / is-pending / is-failed
 function genTaskStateClass(status) {
   if (status === 'completed') return 'done'
@@ -2279,6 +2398,24 @@ function genTaskPreviewSrc(url) {
   return /^https?:\/\//.test(url) ? url : '/' + url
 }
 
+// 生成任务行的时间标签：今天只显示 HH:mm，今年内显示 MM-DD HH:mm，跨年显示完整日期
+function genTaskTimeLabel(row) {
+  const raw = row?.createdAt
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (!Number.isFinite(d.getTime())) return ''
+  const pad = n => String(n).padStart(2, '0')
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const now = new Date()
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  if (sameDay) return hm
+  if (d.getFullYear() === now.getFullYear()) return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hm}`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 function genTaskDuration(row) {
   if (!row.createdAt || !row.completedAt) return ''
   const ms = new Date(row.completedAt).getTime() - new Date(row.createdAt).getTime()
@@ -2286,11 +2423,17 @@ function genTaskDuration(row) {
   return ms >= 60000 ? `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s` : `${Math.round(ms / 1000)}s`
 }
 
-// 抽屉打开且有进行中任务时,4s 轮询;关闭或全部结束时停止
-watch([taskDrawer, genTaskActiveCount], ([open, active]) => {
+// 抽屉打开或存在进行中任务时,4s 轮询;全部结束且抽屉关闭时停止。
+// 刷新页面后从 sys_task 恢复的"生成中"状态也靠这里的轮询感知完成并清除,
+// 所以轮询用 refresh()(内含 loadGenTasks),任务出图后列表同步更新
+watch([taskDrawer, genTaskActiveCount], ([open, active], prev) => {
   stopGenTasksPolling()
-  if (open && active > 0) {
-    genTasksTimer = setInterval(loadGenTasks, 4000)
+  if (open || active > 0) {
+    genTasksTimer = setInterval(refresh, 4000)
+  } else if (prev && prev[1] > 0) {
+    // 任务从"有进行中"变为"全部结束"时,延迟补一次刷新:
+    // 后端 completed → 扣积分 → 回写资产有先后,最后一次轮询可能停在中间态,导致余额/图片显示滞后
+    setTimeout(() => { if (genTaskActiveCount.value === 0) refresh() }, 2000)
   }
 })
 
@@ -2660,13 +2803,19 @@ async function refresh() {
   } catch (e) {
     toast.error(friendlyErrorMessage(e))
   }
+  await loadStudioCredits()
   try { mergeData.value = await mergeAPI.status(epId.value) } catch {}
   await Promise.all([loadGenTasks(), loadExportMerges()])
 }
 
 function saveRaw() { episodeAPI.update(epId.value, { content: localRaw.value }); episode.value.content = localRaw.value }
 function saveScr() { episodeAPI.update(epId.value, { script_content: localScript.value }); episode.value.script_content = localScript.value }
-function doRewrite() { saveRaw(); runAgent('script_rewriter', '请读取剧本并改写为格式化剧本，然后保存', dramaId, epId.value, refresh, chatModelOverride(), chatConfigId()) }
+function doRewrite() {
+  saveRaw()
+  refreshStudioCreditsSoon()
+  runAgent('script_rewriter', '请读取剧本并改写为格式化剧本，然后保存', dramaId, epId.value, refresh, chatModelOverride(), chatConfigId())
+  refreshGenTasksSoon()
+}
 function skipRewrite() {
   const raw = (localRaw.value || rawContent.value || '').trim()
   if (!raw) {
@@ -2746,14 +2895,19 @@ async function syncExtractStatus() {
   } catch {}
 }
 
+/** 页面刷新后恢复仍在运行的剧本改写状态。 */
+async function syncRewriteStatus() {
+  if (!epId.value) return
+  try {
+    const task = await syncAgent('script_rewriter', dramaId, epId.value, refresh)
+    if (task?.status === 'processing') {
+      panel.value = 'script'
+      scriptStep.value = 1
+    }
+  } catch {}
+}
+
 // ─── 批量视频提示词：后端异步逐分镜生成，前端轮询进度 ──────────
-const videoPromptBatch = ref({ running: false, total: 0, completed: 0 })
-// 单个视频提示词生成：按分镜 ID 跟踪，允许不同分镜并行生成（不走全局 rn 锁）
-const videoPromptGeneratingIds = ref([])
-// 分镜勾选：勾选后批量生成只处理所选（已有提示词也会重新生成）；未勾选时处理全部缺失
-const selectedSbIds = ref([])
-// 多选模式：进入后点击卡片=勾选/取消，底部操作条确认生成
-const sbSelectMode = ref(false)
 function isSbSelected(id) { return selectedSbIds.value.includes(id) }
 function toggleSbSelect(id) {
   selectedSbIds.value = isSbSelected(id) ? selectedSbIds.value.filter(x => x !== id) : [...selectedSbIds.value, id]
@@ -2782,8 +2936,10 @@ async function batchVideoPrompts() {
   if (videoPromptBatch.value.running || !epId.value) return
   if (!sbs.value.length) { toast.warning('请先拆分分镜'); return }
   const ids = selectedSbIds.value.length ? [...selectedSbIds.value] : undefined
+  refreshStudioCreditsSoon()
   try {
     const res = await episodeAPI.generateVideoPrompts(epId.value, chatModelOverride(), chatConfigId(), ids)
+    refreshStudioCreditsSoon()
     if (!res?.total) {
       if (res?.already_running) {
         videoPromptBatch.value = { running: true, total: 0, completed: 0 }
@@ -2806,6 +2962,7 @@ function pollVideoPromptBatch(attempts = 240) {
       if (st && st.status !== 'running') {
         videoPromptBatch.value = { running: false, total: 0, completed: 0 }
         await refresh()
+        await loadStudioCredits()
         if (st.status === 'done') {
           toast.success(st.failed ? `视频提示词批量生成完成，${st.failed} 个失败` : '视频提示词批量生成完成')
         } else {
@@ -2834,6 +2991,7 @@ function doBreakdown() {
   const propList = propItems.value.length
     ? propItems.value.map(p => `${p.name}(ID:${p.id})`).join('、')
     : '（当前集还没有道具）'
+  refreshStudioCreditsSoon()
   runAgent('storyboard_breaker', `请基于当前集剧本拆分分镜（不需要生成视频提示词，video_prompt 在视频生成阶段按需生成）。
 
 当前集已有角色：${charList}
@@ -2845,6 +3003,7 @@ function doBreakdown() {
 - 每个镜头尽量匹配上述已有场景填写 scene_id（ID 必须来自上述列表），不要凭空创造新场景
 - 每个镜头出现关键道具（被使用、交接、特写或在画面中明显可见）时，从上述当前集已有道具中绑定 prop_ids（ID 必须来自上述列表）；没有道具出现可传空数组
 - 只有纯环境空镜头才可以不绑定角色`, dramaId, epId.value, refresh, chatModelOverride(), chatConfigId())
+  refreshGenTasksSoon()
 }
 
 // 按需为单个分镜生成视频提示词：由 prompt_generator 读取分镜字段生成并保存到 video_prompt
@@ -2856,6 +3015,8 @@ async function genVideoPrompt(sb) {
   const charNames = getStoryboardCharacters(sb).map(c => c.name).join('、') || '无'
   const propNames = getStoryboardProps(sb).map(p => p.name).join('、') || '无'
   videoPromptGeneratingIds.value.push(sb.id)
+  refreshStudioCreditsSoon()
+  refreshGenTasksSoon()
   try {
     await api.post(`/agent/prompt_generator/chat`, {
       message: `请为分镜 #${idx}(ID:${sb.id})生成视频提示词(video_prompt)。视频模型:${label},请根据该模型的特性和时长限制生成。
@@ -2870,11 +3031,21 @@ async function genVideoPrompt(sb) {
     })
     toast.success(`分镜 #${idx} 视频提示词已生成`)
     await refresh()
+    await loadStudioCredits()
   } catch (e) {
     toast.error(friendlyErrorMessage(e))
+    await loadStudioCredits()
   } finally {
     videoPromptGeneratingIds.value = videoPromptGeneratingIds.value.filter(id => id !== sb.id)
+    refreshGenTasksSoon()
   }
+}
+
+// 生成失败提示:按错误消息去重(vue-sonner 同 id 只保留一条并重置计时),
+// 批量生成时多个资产同样报"积分不足"不再叠成 N 条
+function showGenError(e) {
+  const msg = friendlyErrorMessage(e)
+  toast.error(msg, { id: `gen-err:${msg}` })
 }
 
 function sleep(ms) {
@@ -2886,24 +3057,28 @@ function watchAsyncResult(check, attempts = 24, delay = 2500) {
     for (let i = 0; i < attempts; i++) {
       await sleep(delay)
       await refresh()
-      if (check()) return
+      if (check()) {
+        // 后端时序:任务 completed → settleCredits 扣积分 → 图片回写资产表。
+        // 看到结果时扣费已完成,补拉一次余额,否则积分显示停留在生成前的旧值
+        await loadStudioCredits()
+        return
+      }
     }
+    // 轮询窗口耗尽(生成耗时超出预期)时也补一次,兜底刷新状态与余额
+    await refresh()
+    await loadStudioCredits()
   })()
 }
 
 async function genCharImg(id) {
+  if (isPendingCharImage(id)) return // 防重入:该资产已在生成中,忽略重复触发
   try {
-    if (!isPendingCharImage(id)) pendingCharImageIds.value.push(id)
-    const char = chars.value.find(c => c.id === id)
-    if (char && !(char.final_prompt || char.finalPrompt)) {
-      toast.info('正在生成最终提示词…')
-      try {
-        await ensureAssetPrompt('character', id)
-      } catch {} // 提示词生成失败不阻断：后端生图前会再兜底生成或回退本地拼接
-    }
+    pendingCharImageIds.value.push(id)
+    refreshStudioCreditsSoon()
     await characterAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId())
     toast.success('角色图片生成中')
     await refresh()
+    refreshStudioCreditsSoon()
     watchAsyncResult(() => {
       const char = chars.value.find(c => c.id === id)
       const done = !!(char?.image_url || char?.imageUrl)
@@ -2912,16 +3087,19 @@ async function genCharImg(id) {
     })
   } catch (e) {
     pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
-    toast.error(friendlyErrorMessage(e))
+    showGenError(e)
+    await loadStudioCredits()
   }
 }
 function batchCharImages() {
-  const ids = visualChars.value.filter(c => !(c.image_url || c.imageUrl)).map(c => c.id)
+  const ids = pendingCharacterImageTargets.value.map(c => c.id)
   if (!ids.length) { toast.info('所有角色图片已生成'); return }
   pendingCharImageIds.value = [...new Set([...pendingCharImageIds.value, ...ids])]
+  refreshStudioCreditsSoon()
   characterAPI.batchImages(ids, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId()).then(async () => {
     toast.success('角色图片批量生成中')
     await refresh()
+    refreshStudioCreditsSoon()
     watchAsyncResult(() => ids.every(id => {
       const char = chars.value.find(c => c.id === id)
       const done = !!(char?.image_url || char?.imageUrl)
@@ -2930,22 +3108,19 @@ function batchCharImages() {
     }), 36)
   }).catch(e => {
     pendingCharImageIds.value = pendingCharImageIds.value.filter(item => !ids.includes(item))
-    toast.error(e.message)
+    showGenError(e)
+    loadStudioCredits()
   })
 }
 async function genSceneImg(id) {
+  if (isPendingSceneImage(id)) return
   try {
-    if (!isPendingSceneImage(id)) pendingSceneImageIds.value.push(id)
-    const scene = scenes.value.find(s => s.id === id)
-    if (scene && !(scene.final_prompt || scene.finalPrompt)) {
-      toast.info('正在生成最终提示词…')
-      try {
-        await ensureAssetPrompt('scene', id)
-      } catch {} // 提示词生成失败不阻断：后端生图前会再兜底生成或回退本地拼接
-    }
+    pendingSceneImageIds.value.push(id)
+    refreshStudioCreditsSoon()
     await sceneAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId())
     toast.success('场景图片生成中')
     await refresh()
+    refreshStudioCreditsSoon()
     watchAsyncResult(() => {
       const scene = scenes.value.find(s => s.id === id)
       const done = !!(scene?.image_url || scene?.imageUrl)
@@ -2954,25 +3129,22 @@ async function genSceneImg(id) {
     })
   } catch (e) {
     pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
-    toast.error(e.message)
+    showGenError(e)
+    await loadStudioCredits()
   }
 }
 function isPendingPropImage(id) {
   return pendingPropImageIds.value.includes(id)
 }
 async function genPropImg(id) {
+  if (isPendingPropImage(id)) return
   try {
-    if (!isPendingPropImage(id)) pendingPropImageIds.value.push(id)
-    const prop = propItems.value.find(p => p.id === id)
-    if (prop && !(prop.final_prompt || prop.finalPrompt)) {
-      toast.info('正在生成最终提示词…')
-      try {
-        await ensureAssetPrompt('prop', id)
-      } catch {} // 提示词生成失败不阻断：后端生图前会再兜底生成或回退本地拼接
-    }
+    pendingPropImageIds.value.push(id)
+    refreshStudioCreditsSoon()
     await propAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId())
     toast.success('道具图片生成中')
     await refresh()
+    refreshStudioCreditsSoon()
     watchAsyncResult(() => {
       const prop = propItems.value.find(p => p.id === id)
       const done = !!(prop?.image_url || prop?.imageUrl)
@@ -2981,14 +3153,16 @@ async function genPropImg(id) {
     })
   } catch (e) {
     pendingPropImageIds.value = pendingPropImageIds.value.filter(item => item !== id)
-    toast.error(e.message)
+    showGenError(e)
+    await loadStudioCredits()
   }
 }
 function batchSceneImages() {
-  const ids = scenes.value.filter(s => !(s.image_url || s.imageUrl)).map(s => s.id)
+  const ids = pendingSceneImageTargets.value.map(s => s.id)
   if (!ids.length) { toast.info('所有场景图片已生成'); return }
   pendingSceneImageIds.value = [...new Set([...pendingSceneImageIds.value, ...ids])]
-  ids.forEach(id => { sceneAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId()).then(() => refresh()).catch(e => toast.error(e.message)) })
+  refreshStudioCreditsSoon()
+  ids.forEach(id => { sceneAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId()).then(() => { refresh(); refreshStudioCreditsSoon() }).catch(e => { pendingSceneImageIds.value = pendingSceneImageIds.value.filter(i => i !== id); showGenError(e); loadStudioCredits() }) })
   toast.success('场景图片批量生成中')
   watchAsyncResult(() => ids.every(id => {
     const scene = scenes.value.find(s => s.id === id)
@@ -2998,10 +3172,11 @@ function batchSceneImages() {
   }), 36)
 }
 function batchPropImages() {
-  const ids = propItems.value.filter(p => !(p.image_url || p.imageUrl)).map(p => p.id)
+  const ids = pendingPropImageTargets.value.map(p => p.id)
   if (!ids.length) { toast.info('所有道具图片已生成'); return }
   pendingPropImageIds.value = [...new Set([...pendingPropImageIds.value, ...ids])]
-  ids.forEach(id => { propAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId()).then(() => refresh()).catch(e => toast.error(e.message)) })
+  refreshStudioCreditsSoon()
+  ids.forEach(id => { propAPI.generateImage(id, epId.value, bareModelName(imageModel.value) || undefined, ownerConfigId(imageModelOptions.value, imageModel.value), chatModelOverride(), chatConfigId()).then(() => { refresh(); refreshStudioCreditsSoon() }).catch(e => { pendingPropImageIds.value = pendingPropImageIds.value.filter(i => i !== id); showGenError(e); loadStudioCredits() }) })
   toast.success('道具图片批量生成中')
   watchAsyncResult(() => ids.every(id => {
     const prop = propItems.value.find(p => p.id === id)
@@ -3373,9 +3548,11 @@ async function genVid(sb) {
   try {
     delete failedVideoMessages.value[sb.id]
     if (!isPendingVideo(sb.id)) pendingVideoIds.value.push(sb.id)
+    refreshStudioCreditsSoon()
     const generation = await taskAPI.generate({ type: 'video', ...params })
     toast.success('视频生成中')
     await refresh()
+    refreshStudioCreditsSoon()
     pollVideoGeneration(generation?.id, sb.id)
   } catch (e) {
     pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== sb.id)
@@ -3384,6 +3561,7 @@ async function genVid(sb) {
       [sb.id]: friendlyErrorMessage(e, '视频生成失败'),
     }
     toast.error(friendlyErrorMessage(e))
+    await loadStudioCredits()
   }
 }
 async function pollVideoGeneration(generationId, storyboardId) {
@@ -3401,6 +3579,7 @@ async function pollVideoGeneration(generationId, storyboardId) {
     try {
       const res = await taskAPI.get(generationId)
       await refresh()
+      await loadStudioCredits()
       if (res?.status === 'completed') {
         pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
         delete failedVideoMessages.value[storyboardId]
@@ -3426,7 +3605,7 @@ async function pollVideoGeneration(generationId, storyboardId) {
   toast.error('视频生成超时')
 }
 function batchVideos() {
-  const missing = sbs.value.filter(s => !hasVid(s) && !isPendingVideo(s.id))
+  const missing = pendingVideoStoryboards.value
   if (!missing.length) {
     toast.info('所有镜头视频已生成')
     return
@@ -3485,7 +3664,7 @@ async function loadConfigs() {
   } catch (e) { console.error('Failed to load AI configs', e) }
 }
 
-onMounted(async () => { await refresh(); loadConfigs(); syncExtractStatus() })
+onMounted(async () => { await refresh(); loadConfigs(); syncExtractStatus(); syncRewriteStatus() })
 </script>
 
 <style scoped>

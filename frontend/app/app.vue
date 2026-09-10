@@ -2,7 +2,12 @@
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
-  <Toaster position="top-center" :duration="3200" :expand="true" close-button />
+  <Toaster
+    position="top-center"
+    :duration="3200"
+    :expand="true"
+    close-button
+  />
 </template>
 
 <script setup>

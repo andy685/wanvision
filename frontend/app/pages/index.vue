@@ -33,10 +33,7 @@
           {{ f.label }}
         </button>
       </div>
-      <select v-model="sortMode" class="input sort-select" aria-label="项目排序">
-        <option value="updated">最近更新</option>
-        <option value="title">项目名称</option>
-      </select>
+      <BaseSelect v-model="sortMode" class="sort-select" :options="sortOptions" placeholder="项目排序" :searchable="false" />
     </div>
 
     <div v-if="loading" class="project-grid">
@@ -216,6 +213,10 @@ const aspectRatioOptions = [
   { label: '9:16 · 竖屏', value: '9:16' },
   { label: '1:1 · 方形', value: '1:1' },
   { label: '自适应', value: 'adaptive' },
+]
+const sortOptions = [
+  { label: '最近更新', value: 'updated' },
+  { label: '项目名称', value: 'title' },
 ]
 const filters = [
   { label: '全部', value: 'all' },
@@ -463,15 +464,20 @@ onBeforeUnmount(() => {
 .filter-chip.on { background: var(--text-0); color: #fff; }
 .sort-select {
   margin-left: auto;
-  width: auto;
+  width: 136px;
   min-width: 132px;
+}
+.sort-select :deep(.base-select-trigger) {
   min-height: 36px;
   border-radius: var(--radius-pill);
-  border-color: var(--border);
   background: rgba(0, 0, 0, 0.04);
-  color: var(--text-1);
+  border-color: var(--border);
+  box-shadow: none;
 }
-.sort-select:focus { background: #fff; }
+.sort-select :deep(.base-select-trigger:hover),
+.sort-select :deep(.base-select-trigger.open) {
+  background: #fff;
+}
 
 .project-grid {
   display: grid;

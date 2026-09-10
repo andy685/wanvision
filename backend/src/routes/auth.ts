@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
 import { badRequest, created, success, now } from '../utils/response.js'
+import { logAdminAction } from '../services/admin-audit.js'
 
 const app = new Hono()
 const SESSION_DAYS = 30
@@ -29,7 +30,7 @@ function tokenHash(token: string) {
 }
 
 function validPhone(phone: unknown) {
-  return typeof phone === 'string' && /^\+?[0-9]{6,20}$/.test(phone.trim())
+  return typeof phone === 'string' && /^1[3-9]\d{9}$/.test(phone.trim())
 }
 
 function defaultNickname(phone: string) {
@@ -72,18 +73,18 @@ export async function ensureBootstrapAdmin() {
 }
 
 // 后台账号使用独立表和独立会话，不能注册为业务用户或拥有创作工作区。
+// 仅允许使用后台账号（username）登录，不接受手机号，避免手机号成为后台的第二个登录入口。
 app.post('/admin-login', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const username = typeof body.username === 'string'
-    ? body.username.trim()
-    : (typeof body.phone === 'string' ? body.phone.trim() : '')
+  const username = typeof body.username === 'string' ? body.username.trim() : ''
   const password = typeof body.password === 'string' ? body.password : ''
+  if (!username) return badRequest(c, '请输入后台账号')
+  if (!password) return badRequest(c, '请输入后台密码')
   const [admin] = await db.select().from(schema.adminUsers).where(eq(schema.adminUsers.username, username))
-  const [phoneAdmin] = admin ? [] : await db.select().from(schema.adminUsers).where(eq(schema.adminUsers.phone, username))
-  const resolvedAdmin = admin || phoneAdmin
-  if (!resolvedAdmin || !verifyPassword(password, resolvedAdmin.passwordHash)) return badRequest(c, '后台账号或密码错误')
-  if (resolvedAdmin.status !== 'active') return badRequest(c, '后台账号已停用')
-  return success(c, { admin: { id: resolvedAdmin.id, phone: resolvedAdmin.phone, role: resolvedAdmin.role, status: resolvedAdmin.status }, ...(await createAdminSession(resolvedAdmin.id)) })
+  if (!admin || !verifyPassword(password, admin.passwordHash)) return badRequest(c, '后台账号或密码错误')
+  if (admin.status !== 'active') return badRequest(c, '后台账号已停用')
+  await logAdminAction(admin.id, 'admin_login', 'admin_user', admin.id, { username: admin.username })
+  return success(c, { admin: { id: admin.id, username: admin.username, phone: admin.phone, nickname: admin.nickname || admin.username, avatar: admin.avatar || '', role: admin.role, status: admin.status }, ...(await createAdminSession(admin.id)) })
 })
 
 // POST /auth/register
@@ -91,7 +92,7 @@ app.post('/register', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
   const password = typeof body.password === 'string' ? body.password : ''
-  if (!validPhone(phone)) return badRequest(c, '请输入有效手机号')
+  if (!validPhone(phone)) return badRequest(c, '请输入有效的 11 位手机号')
   if (password.length < 6) return badRequest(c, '密码至少需要 6 位')
 
   const [exists] = await db.select().from(schema.users).where(eq(schema.users.phone, phone))

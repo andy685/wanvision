@@ -42,18 +42,25 @@ export async function startExtraction(episodeId: number, dramaId: number, target
 
   const cost = await getPrice('asset_extract')
   const creditRef = `extract:${episodeId}:${target}:${Date.now()}`
+  const EXTRACT_TARGET_NAMES: Record<string, string> = { characters: '角色', scenes: '场景', props: '道具' }
+  const freezeNote = `资产提取（${EXTRACT_TARGET_NAMES[target] || target}）冻结 ${cost} 积分`
   const textConfig = (opts.configId ? await getConfigById(opts.configId, 'text') : null) || await getTextConfig()
   const resolvedModel = opts.model || textConfig.model || null
 
   const taskRow = await db.insert(schema.sysTask).values({
     type: 'text', dramaId, prompt: EXTRACT_MESSAGES[target], provider: 'extractor', model: resolvedModel,
     params: JSON.stringify({ episode_id: episodeId, drama_id: dramaId, target, model: opts.model || null, config_id: opts.configId || null }),
-    status: 'processing', creditCost: opts.credit ? cost : 0, creditStatus: opts.credit ? 'frozen' : 'none',
+    status: 'processing', creditCost: opts.credit ? cost : 0, creditStatus: opts.credit ? 'pending' : 'none',
     creditWorkspaceId: opts.credit?.workspaceId, creditUserId: opts.credit?.userId, createdAt: now(), updatedAt: now(),
   })
   const taskId = getInsertId(taskRow)
-  try { if (opts.credit) await reserveCredits(opts.credit.workspaceId, opts.credit.userId, cost, `task:${taskId}`) } catch (error) {
-    await db.update(schema.sysTask).set({ status: 'failed', errorMsg: (error as Error).message || '积分不足', updatedAt: now(), completedAt: now() }).where(eq(schema.sysTask.id, taskId))
+  try {
+    if (opts.credit) {
+      await reserveCredits(opts.credit.workspaceId, opts.credit.userId, cost, `task:${taskId}`, freezeNote)
+      await db.update(schema.sysTask).set({ creditStatus: 'frozen', updatedAt: now() }).where(eq(schema.sysTask.id, taskId))
+    }
+  } catch (error) {
+    await db.update(schema.sysTask).set({ status: 'failed', creditStatus: 'none', errorMsg: (error as Error).message || '积分不足', updatedAt: now(), completedAt: now() }).where(eq(schema.sysTask.id, taskId))
     throw error
   }
   const task: ExtractTask = { status: 'running', started_at: new Date().toISOString(), credit_ref: creditRef, task_id: taskId }

@@ -329,9 +329,9 @@
             <input v-model="cfgForm.temperature" class="input" type="number" step="0.1" min="0" max="2" placeholder="如 0.6" />
             <span class="field-hint">部分模型强制固定温度（如 kimi-k2 系只允许 0.6），报 invalid temperature 错误时在此填入对应值。</span>
           </label>
-          <div v-if="cfgTestResult" class="test-result" :class="{ ok: cfgTestResult.reachable, bad: !cfgTestResult.reachable }">
+          <div v-if="cfgTestResult" class="test-result" :class="{ ok: cfgTestResult.ok, bad: !cfgTestResult.ok }">
             <div class="test-result-head">
-              <span class="tag" :class="cfgTestResult.reachable ? 'tag-success' : 'tag-error'">{{ cfgTestResult.status || 'ERROR' }}</span>
+              <span class="tag" :class="cfgTestResult.ok ? 'tag-success' : 'tag-error'">{{ cfgTestResult.status || 'ERROR' }}</span>
               <span>{{ cfgTestResult.message }}</span>
             </div>
             <div class="mono test-result-url">{{ cfgTestResult.method }} {{ cfgTestResult.url }}</div>
@@ -439,7 +439,7 @@ import { Plus, Pencil, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu, 
 import BaseSelect from '~/components/BaseSelect.vue'
 import { toast } from 'vue-sonner'
 import { aiConfigAPI, promptAPI, skillsAPI, stylePresetAPI } from '~/composables/useApi'
-import brandLogo from '~/assets/huobao-logo.png'
+import brandLogo from '~/assets/logo.svg'
 
 const showBrandImage = ref(true)
 const { user } = useAuth()
@@ -489,7 +489,7 @@ const providerPresets = {
   },
 }
 const huobaoQuickConfigs = [
-  { service_type: 'text', provider: 'openai', name: '自有文本服务 · New API', base_url: 'https://cloudapi.flowingcloud.com', model: ['claude-opus-4-8', 'gpt-5.5'], priority: 101 },
+  { service_type: 'text', provider: 'openai', name: '自有文本服务 · New API', base_url: 'https://cloudapi.flowingcloud.com', model: ['gpt-5.5', 'claude-opus-4-8'], priority: 101 },
   { service_type: 'image', provider: 'openai', name: '自有图片服务 · New API', base_url: 'https://cloudapi.flowingcloud.com', model: ['gpt-image-2'], priority: 99 },
   { service_type: 'video', provider: 'volcengine', name: '自有视频服务 · Seedance', base_url: 'https://cloudapi.flowingcloud.com', model: ['doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128', 'doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-5-260628'], priority: 98 },
 ]
@@ -593,7 +593,7 @@ async function testCfgPayload(payload) {
   cfgTesting.value = true
   try {
     cfgTestResult.value = await aiConfigAPI.test(payload)
-    if (cfgTestResult.value.reachable) toast.success('端点已响应')
+    if (cfgTestResult.value.ok) toast.success('端点已响应')
     else toast.warning('端点未通过测试')
   } catch (e) {
     toast.error(e.message)
@@ -965,7 +965,9 @@ onMounted(() => {
 }
 
 .settings-content { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
-.settings-scroll { height: 100%; overflow-y: auto; padding: 24px 40px 48px; max-width: var(--page-fixed-width); margin: 0 auto; animation: fadeUp 0.3s var(--ease-out); }
+/* 滚动容器全宽(滚动条贴窗口右缘),内容逐项限宽居中(宽度=原容器宽-左右内边距,视觉不变) */
+.settings-scroll { height: 100%; overflow-y: auto; padding: 24px 40px 48px; animation: fadeUp 0.3s var(--ease-out); }
+.settings-scroll > * { max-width: calc(var(--page-fixed-width) - 80px); margin-left: auto; margin-right: auto; }
 .settings-head { margin-bottom: 20px; }
 .settings-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
 .settings-desc { font-size: 13px; color: var(--text-2); margin-top: 6px; }
@@ -1168,7 +1170,6 @@ onMounted(() => {
 }
 .skills-agent-item.active .skill-count-badge { background: var(--accent-bg); color: var(--accent-text); }
 .skills-main { flex: 1; min-width: 0; }
-.skills-main.settings-scroll { max-width: var(--page-fixed-width); }
 .skills-head { display: flex; align-items: flex-start; gap: 12px; }
 .skills-head-badge { width: 32px; height: 32px; font-size: 16px; }
 .skills-head-copy { min-width: 0; }

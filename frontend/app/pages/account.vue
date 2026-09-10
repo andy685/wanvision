@@ -17,11 +17,14 @@
       <section class="settings-section">
         <div class="section-head">
           <h2>个人资料</h2>
-          <a v-if="user?.role === 'admin'" :href="adminHref('/admin')" class="btn btn-sm">运营后台</a>
         </div>
         <div class="profile-editor">
           <div class="avatar-picker"><img :src="profileForm.avatar || defaultAvatar" alt="头像" class="profile-avatar" @error="useDefaultAvatar" /><label class="avatar-upload"><input type="file" accept="image/png,image/jpeg,image/webp" @change="handleAvatarChange" />{{ uploadingAvatar ? '上传中' : '更换头像' }}</label></div>
-          <div class="profile-fields"><label>昵称<input v-model.trim="profileForm.nickname" class="input" maxlength="64" placeholder="设置一个昵称" /></label><small>用于个人资料和创作内容中的署名。</small></div>
+          <div class="profile-fields">
+            <label>手机号<input :value="displayPhone" class="input readonly-input" type="tel" readonly aria-readonly="true" /></label>
+            <label>昵称<input v-model.trim="profileForm.nickname" class="input" maxlength="64" placeholder="设置一个昵称" /></label>
+            <small>手机号用于账号登录，昵称用于个人资料和创作内容中的署名。</small>
+          </div>
           <button class="btn btn-primary profile-save" type="button" :disabled="savingProfile" @click="saveProfile"><Loader2 v-if="savingProfile" class="spin" :size="15" /><Save v-else :size="15" />{{ savingProfile ? '保存中' : '保存资料' }}</button>
         </div>
       </section>
@@ -94,11 +97,10 @@
 
 <script setup>
 import { ArrowLeft, ChevronRight, Loader2, LogOut, Save, X } from 'lucide-vue-next'
-import { authAPI, creditAPI, uploadAPI } from '~/composables/useApi'
+import { creditAPI, uploadAPI } from '~/composables/useApi'
 import defaultAvatar from '~/assets/wanying-default-avatar.png'
 
-const { user, changePassword, signOut } = useAuth()
-const config = useRuntimeConfig()
+const { user, changePassword, signOut, updateProfile } = useAuth()
 const accounts = ref([])
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -111,13 +113,9 @@ const savingProfile = ref(false)
 const uploadingAvatar = ref(false)
 const profileForm = reactive({ nickname: '', avatar: '' })
 
-function adminHref(path = '/admin') {
-  const origin = String(config.public.adminOrigin || '').replace(/\/+$/, '')
-  return origin ? `${origin}${path}` : path
-}
-
 const totalBalance = computed(() => accounts.value.reduce((sum, item) => sum + Number(item.balance || 0), 0))
 const totalFrozen = computed(() => accounts.value.reduce((sum, item) => sum + Number(item.frozen || 0), 0))
+const displayPhone = computed(() => user.value?.phone || '未登录')
 
 onMounted(() => {
   if (!user.value) {
@@ -132,9 +130,7 @@ onMounted(() => {
 async function saveProfile() {
   savingProfile.value = true
   try {
-    const result = await authAPI.updateProfile(profileForm)
-    user.value = result
-    localStorage.setItem('wanying:user', JSON.stringify(result))
+    await updateProfile(profileForm)
     message.value = '资料已保存'; messageType.value = 'success'
   } catch (error) { message.value = error.message || '资料保存失败'; messageType.value = 'error' } finally { savingProfile.value = false }
 }
@@ -209,7 +205,6 @@ async function logout() {
   margin: 0 auto;
   padding: 36px var(--page-gutter) 64px;
   color: var(--text-0);
-  overflow-y: auto;
 }
 .back-link {
   min-height: 32px;
@@ -346,9 +341,10 @@ dd {
 .avatar-picker { display:grid; justify-items:center; gap:8px; }
 .profile-avatar { width:68px; height:68px; display:grid; place-items:center; border-radius:18px; background:var(--text-0); color:#fff; font-size:25px; font-weight:750; object-fit:cover; }
 .avatar-upload { color:var(--accent); cursor:pointer; font-size:11px; } .avatar-upload input { display:none; }
-.profile-fields { display:grid; gap:10px; align-items:end; }
+.profile-fields { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px; align-items:end; }
 .profile-fields label { display:grid; gap:6px; color:var(--text-2); font-size:12px; }
 .profile-fields small { grid-column:1 / -1; color:var(--text-3); font-size:11px; }
+.readonly-input { color:var(--text-1); background:var(--surface-soft); cursor:default; }
 .profile-save { align-self:end; white-space:nowrap; }
 .account-credential { margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
 .password-form .btn { justify-self: end; min-width: 120px; }

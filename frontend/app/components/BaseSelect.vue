@@ -3,7 +3,7 @@
     <!-- Trigger -->
     <button type="button" class="base-select-trigger" :class="{ open: isOpen }" @click="toggle">
       <span :class="selectedLabel ? '' : 'placeholder'" class="base-select-label">{{ selectedLabel || placeholder }}</span>
-      <ChevronDown :size="13" class="base-select-arrow" />
+      <ChevronDown :size="14" class="base-select-arrow" />
     </button>
 
     <!-- Dropdown -->
@@ -33,7 +33,10 @@
                 :class="['base-select-option', { selected: opt.value === modelValue, highlighted: highlightedIdx === getGlobalIdx(gi, oi) }]"
                 @click="pick(opt)"
                 @mousemove="highlightedIdx = getGlobalIdx(gi, oi)"
-              >{{ opt.label }}</button>
+              >
+                <span>{{ opt.label }}</span>
+                <Check :size="14" class="base-select-check" />
+              </button>
             </template>
           </template>
           <div v-else class="base-select-empty">无匹配结果</div>
@@ -50,7 +53,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { ChevronDown, Search } from 'lucide-vue-next'
+import { Check, ChevronDown, Search } from 'lucide-vue-next'
 
 const props = defineProps({
   modelValue: { type: [String, Number], default: '' },
@@ -206,9 +209,9 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
   min-height: var(--button-height);
-  padding: 0 30px 0 12px;
+  padding: 0 18px 0 12px;
   font-size: 12px;
   font-weight: 600;
   font-family: var(--font-body);
@@ -255,7 +258,8 @@ onBeforeUnmount(() => {
 }
 
 .base-select-arrow {
-  margin-left: auto;
+  margin-left: 4px;
+  margin-right: 4px;
   color: var(--text-2);
   transition: transform 0.2s var(--ease-out);
   flex-shrink: 0;
@@ -266,21 +270,26 @@ onBeforeUnmount(() => {
 
 /* Dropdown */
 .base-select-dropdown {
-  background: var(--bg-0);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.08);
   overflow: hidden;
   z-index: 9999;
   animation: baseSelectIn 0.15s var(--ease-out);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .base-select-search {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 8px;
+  margin: 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
   color: var(--text-2);
 }
 .base-select-search-input {
@@ -299,7 +308,7 @@ onBeforeUnmount(() => {
 .base-select-options {
   overflow-y: auto;
   max-height: 260px;
-  padding: 4px;
+  padding: 6px;
 }
 
 .base-select-group-label {
@@ -317,24 +326,32 @@ onBeforeUnmount(() => {
 
 .base-select-option {
   appearance: none;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   width: 100%;
-  padding: 7px 10px;
+  min-height: 34px;
+  padding: 8px 10px;
   font-size: 13px;
   font-weight: 500;
   font-family: var(--font-body);
   color: var(--text-1);
-  background: none;
+  background: transparent;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
   transition: background 0.14s var(--ease-out), color 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out);
   word-break: break-all;
 }
+.base-select-option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .base-select-option:hover,
 .base-select-option.highlighted {
-  background: var(--bg-hover);
+  background: rgba(0, 0, 0, 0.05);
   color: var(--text-0);
 }
 .base-select-option:focus-visible {
@@ -344,9 +361,17 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 1px var(--action-primary), 0 0 0 2px var(--button-focus);
 }
 .base-select-option.selected {
-  background: var(--accent-bg);
-  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+  color: var(--text-0);
   font-weight: 600;
+}
+.base-select-check {
+  flex: 0 0 auto;
+  color: var(--accent);
+  opacity: 0;
+}
+.base-select-option.selected .base-select-check {
+  opacity: 1;
 }
 
 .base-select-empty {

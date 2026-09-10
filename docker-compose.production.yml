@@ -1,0 +1,90 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?set MYSQL_DATABASE in .env.production}
+      MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER in .env.production}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env.production}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env.production}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  huobao-drama:
+    build:
+      context: .
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        APT_MIRROR: ${APT_MIRROR:-}
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-5679}:5679"
+    volumes:
+      - ./data:/app/data
+      - ./backend/workspace:/app/backend/workspace
+    environment:
+      NODE_ENV: production
+      PORT: 5679
+      DATABASE_URL: mysql://${MYSQL_USER:?set MYSQL_USER in .env.production}:${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env.production}@mysql:3306/${MYSQL_DATABASE:?set MYSQL_DATABASE in .env.production}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?set FRONTEND_ORIGIN in .env.production}
+      ADMIN_ORIGIN: ${ADMIN_ORIGIN:?set ADMIN_ORIGIN in .env.production}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env.production}
+      API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:?set API_KEY_ENCRYPTION_SECRET in .env.production}
+      COS_SECRET_ID: ${COS_SECRET_ID:-}
+      COS_SECRET_KEY: ${COS_SECRET_KEY:-}
+      COS_BUCKET: ${COS_BUCKET:-}
+      COS_REGION: ${COS_REGION:-}
+      COS_PREFIX: ${COS_PREFIX:-wanying}
+      ADMIN_PHONE: ${ADMIN_PHONE:?set ADMIN_PHONE in .env.production}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?set ADMIN_USERNAME in .env.production}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env.production}
+      WECHAT_MCH_ID: ${WECHAT_MCH_ID:-}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY:-}
+      WECHAT_SERIAL_NO: ${WECHAT_SERIAL_NO:-}
+      WECHAT_PRIVATE_KEY: ${WECHAT_PRIVATE_KEY:-}
+      WECHAT_PLATFORM_PUBLIC_KEY: ${WECHAT_PLATFORM_PUBLIC_KEY:-}
+      WECHAT_WEBHOOK_SECRET: ${WECHAT_WEBHOOK_SECRET:-}
+      ALIPAY_APP_ID: ${ALIPAY_APP_ID:-}
+      ALIPAY_PRIVATE_KEY: ${ALIPAY_PRIVATE_KEY:-}
+      ALIPAY_PUBLIC_KEY: ${ALIPAY_PUBLIC_KEY:-}
+      ALIPAY_RETURN_URL: ${ALIPAY_RETURN_URL:-}
+      ALIPAY_GATEWAY: ${ALIPAY_GATEWAY:-https://openapi.alipay.com/gateway.do}
+      ALIPAY_WEBHOOK_SECRET: ${ALIPAY_WEBHOOK_SECRET:-}
+      PAYMENT_NOTIFY_URL: ${PAYMENT_NOTIFY_URL:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5679/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    restart: unless-stopped
+
+  admin-console:
+    build:
+      context: ./admin-console
+    ports:
+      - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-8081}:80"
+    environment:
+      BACKEND_UPSTREAM: huobao-drama:5679
+    depends_on:
+      huobao-drama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  mysql-data:

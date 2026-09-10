@@ -17,10 +17,11 @@
 <script setup>
 definePageMeta({ middleware: () => navigateTo('/') })
 import { workspaceAPI } from '~/composables/useApi'
+import { STORAGE_KEYS } from '~/constants/storage'
 const spaces = ref([]); const selected = ref(null); const members = ref([]); const loading = ref(true); const saving = ref(false); const showCreate = ref(false); const showInvite = ref(false); const newName = ref(''); const invitePhone = ref(''); const inviteRole = ref('creator')
 const canManage = computed(() => ['owner', 'admin'].includes(selected.value?.role))
 function roleLabel(role) { return ({ owner: '企业所有者', admin: '团队管理员', creator: '创作者', viewer: '查看者' })[role] || role }
-async function selectSpace(space) { selected.value = space; localStorage.setItem('wanying:workspace', String(space.id)); try { members.value = await workspaceAPI.members(space.id) || [] } catch { members.value = [] } }
+async function selectSpace(space) { selected.value = space; localStorage.setItem(STORAGE_KEYS.workspace, String(space.id)); try { members.value = await workspaceAPI.members(space.id) || [] } catch { members.value = [] } }
 async function createSpace() { saving.value = true; try { const space = await workspaceAPI.create(newName.value); spaces.value.push(space); newName.value = ''; showCreate.value = false; await selectSpace(space) } finally { saving.value = false } }
 async function invite() { saving.value = true; try { await workspaceAPI.invite(selected.value.id, invitePhone.value, inviteRole.value); invitePhone.value = ''; showInvite.value = false; await selectSpace(selected.value) } finally { saving.value = false } }
 async function removeMember(member) { if (!confirm(`确定移除 ${member.phone} 吗？`)) return; await workspaceAPI.removeMember(selected.value.id, member.id); await selectSpace(selected.value) }

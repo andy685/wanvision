@@ -5,23 +5,24 @@ app:
   language: "zh" # 系统语言：zh(中文) 或 en(英文)
 
 server:
-  port: 5678
+  port: 5679
   host: "0.0.0.0"
   cors_origins:
-    - "http://localhost:3012"
+    - "http://localhost:3013"
+    - "http://localhost:3014"
   read_timeout: 600
   write_timeout: 600
 
 database:
   type: "mysql"
-  url: "mysql://huobao:huobao@127.0.0.1:3306/huobao_drama"
+  url: "mysql://huobao:huobao@127.0.0.1:3317/huobao_drama"
   max_idle: 10
   max_open: 100
 
 storage:
   type: "local"
   local_path: "./data/storage"
-  base_url: "http://localhost:5678/static"
+  base_url: "http://localhost:5679/static"
 
 ai:
   default_text_provider: "openai"

@@ -92,15 +92,16 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
   }
 
   parseGenerateResponse(result: any): VideoGenResponse {
-    if (result.id) {
-      return { isAsync: true, taskId: result.id }
+    const taskId = result.id || result.task_id || result.taskId || result.data?.id || result.data?.task_id || result.data?.taskId
+    if (taskId) {
+      return { isAsync: true, taskId: String(taskId) }
     }
     // 同步返回
     const videoUrl = result.video_url || result.content?.video_url || result.data?.video_url
     if (videoUrl) {
       return { isAsync: false, videoUrl }
     }
-    throw new Error('No task_id or video_url in response')
+    throw new Error('视频服务没有返回任务 ID 或视频地址，请检查视频模型配置、参考素材是否可访问后重试。')
   }
 
   buildPollRequest(config: AIConfig, taskId: string): ProviderRequest {

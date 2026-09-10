@@ -70,11 +70,17 @@ COS 存储桶默认不公开读，应用通过临时签名链接提供预览和�
 3. 创建腾讯云密钥，并限制到该 COS 存储桶。
 4. 准备生产环境变量文件，不将密钥提交到 Git。
 5. 在 CVM 安装 Docker 和 Docker Compose。
-6. 拉取代码并执行 `docker compose up -d --build`。
-7. 配置用户端域名、管理后台域名、HTTPS 和安全组，只开放 80/443；管理后台域名不要和用户端域名混用。
-8. 配置支付平台回调地址：`/api/v1/recharge/webhooks/wechat` 和 `/api/v1/recharge/webhooks/alipay`。
-9. 使用 `GET /api/v1/health` 检查服务状态。
-10. 打开独立管理后台域名，使用 `ADMIN_PHONE` / `ADMIN_PASSWORD` 登录并配置 AI 服务、价格和支付渠道。
+6. 拉取代码。管理后台 `admin-console/` 是**独立应用**，镜像内不含它，需单独构建与部署：
+   - 容器化（推荐）：compose 已内置 `admin-console` 服务，`docker compose up -d --build` 会一并构建，容器内 Nginx 自动反代 `/api` 到后端
+   - 或手动构建静态产物：`cd admin-console && corepack pnpm@11 build`，产物在 `admin-console/dist/`，用 Nginx 托管并反代 `/api/v1` 到后端
+   > pnpm 11 需要 Node 22+，Node 20 下会报 `ERR_UNKNOWN_BUILTIN_MODULE`
+7. 执行 `docker compose up -d --build`（或使用封装脚本 `./scripts/deploy.sh`，含端口检测与健康检查）。
+8. 配置用户端域名、管理后台域名、HTTPS 和安全组，只开放 80/443；管理后台域名不要和用户端域名混用。
+9. 配置支付平台回调地址：`/api/v1/recharge/webhooks/wechat` 和 `/api/v1/recharge/webhooks/alipay`。
+10. 使用 `GET /api/v1/health` 检查服务状态。
+11. 打开管理后台域名，使用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录并配置 AI 服务、价格和支付渠道。
+
+> 管理后台**只接受后台账号登录，不接受手机号**。若登录后提示账号或密码错误，先确认后端日志是否出现 `[auth] 已初始化超管账号`；`NODE_ENV=production` 时未设置 `ADMIN_PHONE` 会导致完全不建号，此时后台能打开但永远无法登录。
 
 ## 上线检查
 

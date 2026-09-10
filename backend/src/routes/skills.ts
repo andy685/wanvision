@@ -69,9 +69,10 @@ app.post('/', async (c) => {
   if (await fsm().exists(skillFile(id))) return badRequest(c, 'Skill already exists')
 
   const name = segments[segments.length - 1]
-  const content = `---
-name: ${name}
-description: ${description || ''}
+  const rawContent = String(body.content || '').trim()
+  const content = rawContent || `---
+name: ${JSON.stringify(name)}
+description: ${JSON.stringify(String(description || ''))}
 ---
 
 # ${name}

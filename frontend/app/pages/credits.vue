@@ -27,19 +27,36 @@
       </article>
     </section>
 
-    <section class="ledger-section">
-      <div class="section-head"><h2>积分流水</h2><span>{{ ledger.length }} 条记录</span></div>
+    <section class="ledger-section is-flow">
+      <div class="section-head"><h2>积分流水</h2><span>共 {{ ledgerTotal }} 条记录</span></div>
       <div v-if="loading" class="ledger-empty">正在加载积分明细…</div>
       <div v-else-if="!ledger.length" class="ledger-empty">还没有积分变动记录</div>
       <div v-else class="ledger-list">
         <div v-for="row in ledger" :key="row.id" class="ledger-row">
-          <div><strong>{{ ledgerLabel(row.type) }}</strong><span>{{ row.note || '积分变动' }}</span></div>
+          <div><strong>{{ row.task_name || ledgerLabel(row.type) }}</strong><span>{{ row.note || '积分变动' }}</span></div>
           <b :class="row.amount >= 0 ? 'is-add' : 'is-use'">{{ row.amount >= 0 ? '+' : '' }}{{ row.amount }}</b>
           <time>{{ formatDate(row.created_at) }}</time>
         </div>
       </div>
+      <div v-if="!loading && ledgerTotal > ledgerPageSize" class="ledger-pager">
+        <button type="button" :disabled="ledgerPage <= 1" @click="gotoLedgerPage(ledgerPage - 1)">上一页</button>
+        <span>第 {{ ledgerPage }} / {{ ledgerPages }} 页 · 每页 {{ ledgerPageSize }} 条</span>
+        <button type="button" :disabled="ledgerPage >= ledgerPages" @click="gotoLedgerPage(ledgerPage + 1)">下一页</button>
+      </div>
     </section>
-    <section class="ledger-section recharge-history"><div class="section-head"><h2>充值记录</h2><span>{{ orders.length }} 笔订单</span></div><div v-if="!orders.length" class="ledger-empty">还没有充值记录</div><div v-else class="ledger-list"><div v-for="order in orders" :key="order.id" class="ledger-row"><div><strong>{{ order.payment_provider === 'wechat' ? '微信支付' : '支付宝' }}</strong><span class="mono">{{ order.order_no }}</span></div><b>¥{{ (order.amount_fen / 100).toFixed(2) }} · {{ order.credits }} 积分</b><time>{{ order.status === 'pending' ? '待支付' : order.status }} · {{ formatDate(order.created_at) }}</time><button v-if="order.status === 'pending'" class="order-pay" type="button" :disabled="!paymentReady[order.payment_provider]" @click="payOrder(order)">{{ paymentReady[order.payment_provider] ? '去支付' : '待配置' }}</button></div></div></section>
+
+    <section class="ledger-section is-orders">
+      <div class="section-head"><h2>充值记录</h2><span>{{ orders.length }} 笔订单</span></div>
+      <div v-if="!orders.length" class="ledger-empty">还没有充值记录</div>
+      <div v-else class="ledger-list">
+        <div v-for="order in orders" :key="order.id" class="ledger-row">
+          <div><strong>{{ order.payment_provider === 'wechat' ? '微信支付' : '支付宝' }}</strong><span class="mono">{{ order.order_no }}</span></div>
+          <b>¥{{ (order.amount_fen / 100).toFixed(2) }} · {{ order.credits }} 积分</b>
+          <time>{{ order.status === 'pending' ? '待支付' : order.status }} · {{ formatDate(order.created_at) }}</time>
+          <button v-if="order.status === 'pending'" class="order-pay" type="button" :disabled="!paymentReady[order.payment_provider]" @click="payOrder(order)">{{ paymentReady[order.payment_provider] ? '去支付' : '待配置' }}</button>
+        </div>
+      </div>
+    </section>
 
     <section class="ledger-section credits-help">
       <div class="section-head"><h2>积分说明</h2></div>
@@ -79,6 +96,11 @@ const accounts = ref([])
 const orders = ref([])
 const ledger = ref([])
 const loading = ref(true)
+// 积分流水分页:默认 50 条/页,后端同样限制,避免流水过大拖垮页面
+const ledgerPage = ref(1)
+const ledgerPageSize = 50
+const ledgerTotal = ref(0)
+const ledgerPages = computed(() => Math.max(1, Math.ceil(ledgerTotal.value / ledgerPageSize)))
 const showRecharge = ref(false)
 const customAmount = ref(10)
 const selected = ref(null)
@@ -89,7 +111,7 @@ const rechargeMessage = ref('')
 const packages = [{ price: 10, credits: 100 }, { price: 50, credits: 500 }, { price: 100, credits: 1000 }, { price: 500, credits: 5000 }]
 const totalBalance = computed(() => accounts.value.reduce((sum, item) => sum + Number(item.balance || 0), 0))
 const totalFrozen = computed(() => accounts.value.reduce((sum, item) => sum + Number(item.frozen || 0), 0))
-function ledgerLabel(type) { return ({ welcome: '注册赠送', recharge: '充值到账', consume: 'AI 生成消费', refund: '生成失败退款' })[type] || '积分变动' }
+function ledgerLabel(type) { return ({ welcome: '注册赠送', recharge: '充值到账', recharge_refund: '充值退款', consume: 'AI 生成消费', refund: '生成失败退款', freeze: '积分冻结', admin_adjust: '后台调账' })[type] || '积分变动' }
 function formatDate(value) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-' }
 async function createRecharge() {
   if (!customAmount.value || customAmount.value < 1) { rechargeMessage.value = '请输入至少 1 元'; return }
@@ -112,15 +134,34 @@ async function payOrder(order) {
     for (let i = 0; i < 5 && order.status === 'pending'; i++) { await new Promise(resolve => setTimeout(resolve, 2000)); const latest = await rechargeAPI.get(order.order_no); Object.assign(order, latest); if (latest.status === 'paid') { await reloadCredits(); rechargeMessage.value = `充值到账 ${latest.credits} 积分` } }
   } catch (e) { paymentWindow?.close(); rechargeMessage.value = e.message || '支付请求失败' }
 }
-async function reloadCredits() { accounts.value = await creditAPI.list() || []; ledger.value = await creditAPI.ledger() || [] }
+async function loadLedger() {
+  const data = await creditAPI.ledger({ page: ledgerPage.value, pageSize: ledgerPageSize }) || {}
+  ledger.value = data.list || []
+  ledgerTotal.value = data.total || 0
+}
+async function gotoLedgerPage(p) {
+  if (p < 1 || p > ledgerPages.value || p === ledgerPage.value) return
+  ledgerPage.value = p
+  try { await loadLedger() } catch { /* 保持当前页数据 */ }
+}
+async function reloadCredits() {
+  accounts.value = await creditAPI.list() || []
+  await loadLedger()
+}
 onMounted(async () => {
   if (!user.value) { await navigateTo('/login'); return }
-  try { accounts.value = await creditAPI.list() || []; ledger.value = await creditAPI.ledger() || []; orders.value = await rechargeAPI.list() || []; const readiness = await api.get('/health/ready'); paymentReady.value = readiness?.payments || paymentReady.value } finally { loading.value = false }
+  try {
+    accounts.value = await creditAPI.list() || []
+    await loadLedger()
+    orders.value = await rechargeAPI.list() || []
+    const readiness = await api.get('/health/ready')
+    paymentReady.value = readiness?.payments || paymentReady.value
+  } finally { loading.value = false }
 })
 </script>
 
 <style scoped>
-.credits-page { width: min(var(--page-fixed-width), 100%); margin: 0 auto; padding: 36px var(--page-gutter) 64px; color: var(--text-0); overflow-y: auto; }
+.credits-page { width: min(var(--page-fixed-width), 100%); margin: 0 auto; padding: 36px var(--page-gutter) 64px; color: var(--text-0); }
 .credits-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 16px; }
 .back-link { min-height: 32px; display:inline-flex; align-items:center; gap:6px; border: 0; padding: 0 10px; border-radius: var(--radius-pill); background: transparent; color: var(--text-2); cursor: pointer; font: 650 12px/1 var(--font-body); }
 .back-link:hover { background: var(--bg-hover); color: var(--text-0); }
@@ -130,15 +171,32 @@ h1 { margin: 22px 0 0; font-size: 26px; }
 .balance-card { min-height: 132px; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); display: flex; flex-direction: column; justify-content: space-between; box-shadow: var(--shadow-card); }
 .balance-main { border-color: color-mix(in srgb, var(--accent) 42%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
 .balance-label, .balance-hint { color: var(--text-3); font-size: 12px; } .balance-card strong { font-size: 32px; font-variant-numeric: tabular-nums; }
-.ledger-section { margin-top: 14px; padding:18px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface-raised); box-shadow:var(--shadow-card); } .section-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; } .section-head h2 { margin:0; font-size:16px; } .section-head span { color:var(--text-3); font-size:12px; }
+.ledger-section { margin-top: 14px; padding:18px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface-raised); box-shadow:var(--shadow-card); }
+.section-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; } .section-head h2 { margin:0; font-size:16px; } .section-head span { color:var(--text-3); font-size:12px; }
+/* 流水列表限高,滚动条收在区块内部,页面本体不拉长 */
+.is-flow .ledger-list { max-height: 560px; overflow-y: auto; }
 .ledger-list { border:1px solid var(--border); border-radius:8px; overflow:hidden; background:var(--surface-raised); } .ledger-row { display:grid; grid-template-columns:1fr auto 170px; gap:20px; align-items:center; padding:15px 18px; border-bottom:1px solid var(--border); } .ledger-row:last-child { border-bottom:0; } .ledger-row div { display:grid; gap:4px; } .ledger-row span, .ledger-row time { color:var(--text-3); font-size:12px; } .ledger-row b { font-variant-numeric: tabular-nums; } .is-add { color:#16803c; } .is-use { color:#c43232; } .ledger-empty { padding:50px; border:1px dashed var(--border); border-radius:8px; text-align:center; color:var(--text-3); font-size:13px; }
+.ledger-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; }
+.ledger-pager span { color: var(--text-3); font-size: 12px; }
+.ledger-pager button { min-height: 30px; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: transparent; color: var(--text-1); font: 600 12px/1 var(--font-body); cursor: pointer; }
+.ledger-pager button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.ledger-pager button:disabled { opacity: 0.4; cursor: not-allowed; }
 .modal-backdrop { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:20px; background:rgba(16,24,40,.42); } .recharge-modal { position:relative; width:min(100%,460px); padding:28px; border-radius:var(--radius); background:var(--surface-raised); box-shadow:var(--shadow-xl); } .modal-close { position:absolute; top:12px; right:12px; width:34px; height:34px; display:grid; place-items:center; border:0; border-radius:var(--radius-pill); background:transparent; color:var(--text-2); cursor:pointer; } .modal-close:hover { background:var(--bg-hover); color:var(--text-0); } .modal-close:focus-visible { outline:none; box-shadow:0 0 0 3.5px var(--button-focus); } .recharge-modal h2 { margin:0 0 7px; font-size:20px; } .recharge-modal p { margin:0 0 20px; color:var(--text-3); font-size:12px; } .recharge-options { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; } .recharge-option { display:grid; gap:5px; padding:14px; text-align:left; border:1px solid var(--border); border-radius:7px; background:transparent; cursor:pointer; } .recharge-option:hover, .recharge-option.selected { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 7%, var(--surface)); } .recharge-option span { color:var(--text-3); font-size:12px; } .custom-recharge { display:flex; align-items:end; justify-content:space-between; gap:12px; margin-top:16px; color:var(--text-2); font-size:12px; } .custom-recharge label { display:grid; gap:6px; flex:1; } .payment-providers { display:flex; gap:8px; margin-top:14px; } .payment-providers button { flex:1; min-height:38px; border:1px solid var(--border); border-radius:7px; background:transparent; color:var(--text-1); cursor:pointer; } .payment-providers button.selected { border-color:var(--accent); color:var(--accent); background:color-mix(in srgb, var(--accent) 7%, var(--surface)); } .recharge-message { margin:12px 0 0 !important; color:var(--accent) !important; } .recharge-submit { width:100%; justify-content:center; margin-top:22px; }
 .credits-help { margin-top: 14px; }
 .help-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 .help-item { display: grid; gap: 6px; }
 .help-item strong { font-size: 13px; color: var(--text-0); }
 .help-item p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--text-2); }
-@media (max-width:700px) { .credits-page { padding:24px var(--page-gutter-sm) 40px; } .credits-head { align-items:stretch; flex-direction:column; } .credits-head .btn { width:100%; } .balance-grid { grid-template-columns:1fr; } .ledger-row { grid-template-columns:1fr auto; gap:8px; } .ledger-row time { grid-column:1 / -1; } .help-grid { grid-template-columns: 1fr; } }
+@media (max-width:700px) {
+  .credits-page { padding: 24px var(--page-gutter-sm) 40px; }
+  .credits-head { align-items:stretch; flex-direction:column; }
+  .credits-head .btn { width:100%; }
+  .balance-grid { grid-template-columns:1fr; }
+  .is-flow .ledger-list { max-height: 420px; }
+  .ledger-row { grid-template-columns:1fr auto; gap:8px; }
+  .ledger-row time { grid-column:1 / -1; }
+  .help-grid { grid-template-columns: 1fr; }
+}
 </style>
 
 <style scoped>

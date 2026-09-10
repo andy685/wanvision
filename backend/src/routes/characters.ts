@@ -8,8 +8,9 @@ import { getDramaStylePrompt } from '../services/style-preset.js'
 import { ensureCharacterFinalPrompt } from '../services/final-prompt.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 import { canAccessDrama, canAccessEpisode, canManageDrama, canWriteDrama } from '../utils/workspace-access.js'
-import { workspaceForToken, consumeCredits } from '../services/credits.js'
+import { workspaceForToken } from '../services/credits.js'
 import { getPrice } from '../services/pricing.js'
+import { runBillableTextTask } from '../services/text-task.js'
 
 const app = new Hono()
 const CHARACTER_IMAGE_SIZE = '1920x1080'
@@ -137,18 +138,31 @@ app.post('/:id/generate-prompt', async (c) => {
   const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id)))
   if (!ep) return badRequest(c, 'Episode not found')
   if (ep.dramaId !== char.dramaId) return badRequest(c, '角色与剧集不属于同一项目')
+  if (char.finalPrompt && !body.force) return success(c, { final_prompt: char.finalPrompt })
   logTaskStart('FinalPrompt', 'character-generate', { characterId: id, episodeId: ep.id, force: !!body.force })
-  const finalPrompt = await ensureCharacterFinalPrompt(char, ep.id, !!body.force, { model: body.text_model, configId: body.text_config_id ?? undefined })
-  if (!finalPrompt) {
-    logTaskError('FinalPrompt', 'character-generate', { characterId: id, error: 'agent returned empty prompt' })
-    return badRequest(c, '最终提示词生成失败，请重试')
-  }
   const promptCost = await getPrice('character_prompt')
   const creditOwner = await workspaceForToken((c.req.header('Authorization') || '').replace(/^Bearer\s+/i, '').trim(), Number(c.req.header('X-Workspace-Id') || 0) || undefined)
   if (!creditOwner) return badRequest(c, '未找到可用积分账户')
-  await consumeCredits(creditOwner.workspaceId, creditOwner.userId, promptCost, `character-prompt:${id}:${Date.now()}`, `角色提示词生成 ${promptCost} 积分`)
-  logTaskSuccess('FinalPrompt', 'character-generate', { characterId: id })
-  return success(c, { final_prompt: finalPrompt })
+  try {
+    const finalPrompt = await runBillableTextTask({
+      dramaId: char.dramaId,
+      episodeId: ep.id,
+      characterId: id,
+      provider: 'prompt_generator',
+      model: body.text_model || null,
+      prompt: `为角色「${char.name}」生成三视图最终提示词`,
+      params: { agent_type: 'prompt_generator', action: 'character_prompt', character_id: id, force: !!body.force },
+      credit: { workspaceId: creditOwner.workspaceId, userId: creditOwner.userId, cost: promptCost },
+      run: () => ensureCharacterFinalPrompt(char, ep.id, !!body.force, { model: body.text_model, configId: body.text_config_id ?? undefined }),
+      validate: prompt => !!String(prompt || '').trim(),
+      emptyMessage: '最终提示词生成失败，请重试',
+    })
+    logTaskSuccess('FinalPrompt', 'character-generate', { characterId: id })
+    return success(c, { final_prompt: finalPrompt })
+  } catch (err: any) {
+    logTaskError('FinalPrompt', 'character-generate', { characterId: id, error: err.message })
+    return badRequest(c, err.message || '最终提示词生成失败，请重试')
+  }
 })
 
 // POST /characters/batch-generate-images

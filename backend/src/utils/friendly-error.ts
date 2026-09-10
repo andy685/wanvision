@@ -30,6 +30,26 @@ export function friendlyErrorMessage(error: unknown, fallback = '操作失败，
   const text = deepDecodeMessage(raw)
   const lower = text.toLowerCase()
 
+  if (/^(500|502|503)$/i.test(text)) {
+    return '服务暂时不可用，请稍后重试。如果连续出现，请检查后端日志或切换模型配置。'
+  }
+
+  if (/^504$/i.test(text)) {
+    return '生成服务响应超时了，通常是上游暂时繁忙。请稍后重试或切换模型配置。'
+  }
+
+  if (/^401$/i.test(text)) {
+    return '当前登录状态已失效，请重新登录后再试。'
+  }
+
+  if (/^403$/i.test(text)) {
+    return '当前账号权限不足，无法执行这个操作。'
+  }
+
+  if (/^404$/i.test(text)) {
+    return '没有找到对应的数据，请刷新页面后再试。'
+  }
+
   if (/input image .*may contain real person/i.test(text)
     || lower.includes('inputimagesensitivecontentdetected')
     || lower.includes('privacyinformation')) {
@@ -56,6 +76,10 @@ export function friendlyErrorMessage(error: unknown, fallback = '操作失败，
     return '服务没有返回可用的生成结果。请重试一次，或切换模型/配置。'
   }
 
+  if (lower.includes('task_id is empty') || lower.includes('no task_id') || lower.includes('task id')) {
+    return '视频服务没有返回任务 ID，系统无法继续查询生成进度。通常是上游没有受理本次请求，请检查视频模型配置、参考素材是否可访问，或稍后重试。'
+  }
+
   if (lower.includes('<html') || lower.includes('<!doctype')) {
     return '上游服务返回了异常页面，暂时无法完成生成。请稍后重试。'
   }
@@ -64,7 +88,7 @@ export function friendlyErrorMessage(error: unknown, fallback = '操作失败，
     return '请求没有被生成服务接受。请检查提示词、参考素材或模型配置后重试。'
   }
 
-  if (/api error 5\d\d/i.test(text)) {
+  if (/api error 5\d\d/i.test(text) || lower.includes('internal server error')) {
     return '生成服务暂时不可用，请稍后重试或切换模型配置。'
   }
 

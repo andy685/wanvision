@@ -6,8 +6,6 @@ services:
       MYSQL_USER: huobao
       MYSQL_PASSWORD: huobao
       MYSQL_ROOT_PASSWORD: huobao_root
-    ports:
-      - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
@@ -29,7 +27,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5679
-      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:5679}
+      - ADMIN_ORIGIN=${ADMIN_ORIGIN:-http://localhost:3014}
       - API_KEY_ENCRYPTION_SECRET=${API_KEY_ENCRYPTION_SECRET:-}
       - DATABASE_URL=mysql://huobao:huobao@mysql:3306/huobao_drama
       - COS_SECRET_ID=${COS_SECRET_ID:-}
@@ -37,7 +36,9 @@ services:
       - COS_BUCKET=${COS_BUCKET:-}
       - COS_REGION=${COS_REGION:-}
       - COS_PREFIX=${COS_PREFIX:-wanying}
-      - ADMIN_PHONE=${ADMIN_PHONE:-}
+      - ADMIN_PHONE=${ADMIN_PHONE:-13800138000}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Admin@123456}
       - WECHAT_MCH_ID=${WECHAT_MCH_ID:-}
       - WECHAT_APP_ID=${WECHAT_APP_ID:-}
       - WECHAT_API_V3_KEY=${WECHAT_API_V3_KEY:-}
@@ -60,6 +61,26 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 15s
+    restart: unless-stopped
+
+  # 独立管理后台（admin-console，vue-pure-admin）
+  admin-console:
+    build:
+      context: ./admin-console
+    ports:
+      # 与本地 pnpm dev 的 3014 错开，避免 docker compose up 时端口冲突
+      - "8081:80"
+    environment:
+      # 容器内通过服务名访问后端；独立部署时改为真实后端地址
+      - BACKEND_UPSTREAM=huobao-drama:5679
+    depends_on:
+      huobao-drama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
