@@ -97,6 +97,7 @@
 
 <script setup>
 import { ArrowLeft, ChevronRight, Loader2, LogOut, Save, X } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 import { creditAPI, uploadAPI } from '~/composables/useApi'
 import defaultAvatar from '~/assets/wanying-default-avatar.png'
 
@@ -122,25 +123,36 @@ onMounted(() => {
     navigateTo('/login?redirect=/account')
     return
   }
-  profileForm.nickname = user.value.nickname || `万影用户${String(user.value.phone || '').slice(-4)}`
-  profileForm.avatar = user.value.avatar || ''
+  syncProfileForm()
   loadAccountData()
 })
+
+// 启动时的资料校准（user-sync 插件）是异步的，可能晚于表单初始化完成；
+// 监听 user 变化把最新昵称/头像同步进表单，避免表单停留在过期的本地缓存值
+watch(user, (val) => {
+  if (val && !savingProfile.value) syncProfileForm()
+})
+
+function syncProfileForm() {
+  if (!user.value) return
+  profileForm.nickname = user.value.nickname || `万影用户${String(user.value.phone || '').slice(-4)}`
+  profileForm.avatar = user.value.avatar || ''
+}
 
 async function saveProfile() {
   savingProfile.value = true
   try {
     await updateProfile(profileForm)
-    message.value = '资料已保存'; messageType.value = 'success'
-  } catch (error) { message.value = error.message || '资料保存失败'; messageType.value = 'error' } finally { savingProfile.value = false }
+    toast.success('资料已保存')
+  } catch (error) { toast.error(error.message || '资料保存失败') } finally { savingProfile.value = false }
 }
 
 async function handleAvatarChange(event) {
   const file = event.target.files?.[0]
   if (!file) return
-  if (file.size > 5 * 1024 * 1024) { message.value = '头像不能超过 5MB'; messageType.value = 'error'; return }
+  if (file.size > 5 * 1024 * 1024) { toast.error('头像不能超过 5MB'); return }
   uploadingAvatar.value = true
-  try { const result = await uploadAPI.image(file); profileForm.avatar = result.url; await saveProfile() } catch (error) { message.value = error.message || '头像上传失败'; messageType.value = 'error' } finally { uploadingAvatar.value = false; event.target.value = '' }
+  try { const result = await uploadAPI.image(file); profileForm.avatar = result.url; await saveProfile() } catch (error) { toast.error(error.message || '头像上传失败') } finally { uploadingAvatar.value = false; event.target.value = '' }
 }
 
 function useDefaultAvatar(event) {

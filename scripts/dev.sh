@@ -68,7 +68,7 @@ mkdir -p "$LOG_DIR"
 : > "$PID_FILE"
 
 echo ""
-info "万影工坊本地开发环境启动中（项目根目录: $ROOT_DIR）"
+info "万影工坊本地开发环境启动中（项目根目录: ${ROOT_DIR}）"
 echo ""
 
 # ---------- 环境检查 ----------

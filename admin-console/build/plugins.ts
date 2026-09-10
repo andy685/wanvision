@@ -38,11 +38,15 @@ export async function getPluginsList(
      * Mac 默认组合键 Option + Shift
      * Windows 默认组合键 Alt + Shift
      * 更多用法看 https://inspector.fe-dev.cn/guide/start.html
+     *
+     * 该插件会在系统临时目录创建缓存目录，受限环境（沙箱/CI）无法创建时可设 VITE_CODE_INSPECTOR=off 关闭
      */
-    codeInspectorPlugin({
-      bundler: "vite",
-      hideConsole: true
-    }),
+    process.env.VITE_CODE_INSPECTOR === "off"
+      ? (null as any)
+      : codeInspectorPlugin({
+          bundler: "vite",
+          hideConsole: true
+        }),
     viteBuildInfo(),
     /**
      * 开发环境下移除非必要的vue-router动态路由警告No match found for location with path

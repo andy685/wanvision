@@ -70,7 +70,6 @@ export const quickConfigs = [
     name: "自有视频服务 · Seedance",
     base_url: AI_GATEWAY_BASE_URL,
     model: [
-      "doubao-seedance-2-0-fast-260128",
       "doubao-seedance-2-0-260128",
       "doubao-seedance-2-0-mini-260615",
       "doubao-seedance-2-5-260628"

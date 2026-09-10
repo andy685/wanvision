@@ -38,7 +38,7 @@ const ruleFormRef = ref<FormInstance>();
 const { t } = useI18n();
 const { initStorage } = useLayout();
 initStorage();
-const { title } = useNav();
+const { title, getLogo } = useNav();
 
 const ruleForm = reactive({
   username: "",
@@ -112,7 +112,7 @@ watch(loginDay, value => {
     <div class="login-container">
       <div class="login-box">
         <div class="login-form">
-          <img src="/logo.png" alt="万影工坊" class="avatar platform-login-logo" />
+          <img :src="getLogo()" alt="万影工坊" class="avatar platform-login-logo" />
           <Motion>
             <h2 class="outline-hidden">
               <TypeIt

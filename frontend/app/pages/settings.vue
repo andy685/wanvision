@@ -484,14 +484,14 @@ const providerPresets = {
     openai: { label: 'OpenAI 官方', baseUrl: 'https://api.openai.com', models: ['gpt-image-2'] },
   },
   video: {
-    volcengine: { label: 'Seedance 2.0 官方', baseUrl: 'https://ark.cn-beijing.volces.com', models: ['doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128', 'doubao-seedance-2-0-mini-260615'] },
+    volcengine: { label: 'Seedance 2.0 官方', baseUrl: 'https://ark.cn-beijing.volces.com', models: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-mini-260615'] },
     minimax: { label: 'MiniMax H3 官方', baseUrl: 'https://api.minimaxi.com', models: ['MiniMax-H3'] },
   },
 }
 const huobaoQuickConfigs = [
   { service_type: 'text', provider: 'openai', name: '自有文本服务 · New API', base_url: 'https://cloudapi.flowingcloud.com', model: ['gpt-5.5', 'claude-opus-4-8'], priority: 101 },
   { service_type: 'image', provider: 'openai', name: '自有图片服务 · New API', base_url: 'https://cloudapi.flowingcloud.com', model: ['gpt-image-2'], priority: 99 },
-  { service_type: 'video', provider: 'volcengine', name: '自有视频服务 · Seedance', base_url: 'https://cloudapi.flowingcloud.com', model: ['doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128', 'doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-5-260628'], priority: 98 },
+  { service_type: 'video', provider: 'volcengine', name: '自有视频服务 · Seedance', base_url: 'https://cloudapi.flowingcloud.com', model: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-5-260628'], priority: 98 },
 ]
 
 function byType(t) { return cfgs.value.filter(c => c.service_type === t) }

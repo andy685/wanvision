@@ -87,7 +87,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function updateProfile(data: { nickname: string; avatar: string }) {
     const result = await authAPI.updateProfile(data)
-    if (result) user.value = result
+    if (result) {
+      user.value = result
+      // 同步写回 localStorage，否则刷新页面后 hydrate() 会用旧资料覆盖显示
+      if (import.meta.client) {
+        localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(result))
+      }
+    }
     return result
   }
 

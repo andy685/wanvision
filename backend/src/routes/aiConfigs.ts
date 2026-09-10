@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
 import { success, notFound, created, badRequest, now } from '../utils/response.js'
 import { toSnakeCase } from '../utils/transform.js'
-import { joinProviderUrl } from '../services/adapters/url.js'
+import { joinProviderUrl, normalizeProviderBaseUrl } from '../services/adapters/url.js'
 import { isOfficialProvider, parseConfigTemperature } from '../services/ai.js'
 import { redactUrl, logTaskError, logTaskProgress, logTaskSuccess } from '../utils/task-logger.js'
 import { currentAdmin } from '../utils/workspace-access.js'
@@ -214,7 +214,7 @@ function buildConfigValues(body: any, ts: string, existing?: any) {
     serviceType: body.service_type ?? existing?.serviceType,
     provider: body.provider ?? existing?.provider,
     name: body.name ?? existing?.name ?? `${body.provider}-${body.service_type}`,
-    baseUrl: body.base_url ?? existing?.baseUrl ?? '',
+    baseUrl: 'base_url' in body ? normalizeProviderBaseUrl(body.base_url || '') : existing?.baseUrl ?? '',
     apiKey: 'api_key' in body && body.api_key !== 'configured'
       ? encryptSecret(body.api_key || '')
       : existing?.apiKey ?? encryptSecret(''),

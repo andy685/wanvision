@@ -15,11 +15,11 @@ import type {
   VideoGenResponse,
   VideoPollResponse,
 } from './types'
-import { joinProviderUrl } from './url'
+import { joinProviderUrl, normalizeProviderBaseUrl } from './url'
 
-/** 仅支持 Seedance 2.0+ 系列（前缀匹配，兼容未来 2.0.x 变体） */
-const SEEDANCE2_MODEL_PREFIX = 'doubao-seedance-2-0'
-const DEFAULT_MODEL = 'doubao-seedance-2-0-fast-260128'
+/** 兼容 FlowingCloud 中转站可用的 Seedance 系列模型。 */
+const SEEDANCE_MODEL_PREFIXES = ['doubao-seedance-2-0', 'doubao-seedance-2-5']
+const DEFAULT_MODEL = 'doubao-seedance-2-0-260128'
 
 /** 多模态参考素材上限：图片 9、视频 3、音频 3 */
 const REF_LIMITS = { images: 9, videos: 3, audios: 3 } as const
@@ -38,13 +38,15 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
   provider = 'volcengine'
 
   buildGenerateRequest(config: AIConfig, record: VideoGenerationRecord): ProviderRequest {
-    const model = record.model || config.model || DEFAULT_MODEL
-    if (!model.startsWith(SEEDANCE2_MODEL_PREFIX)) {
-      throw new Error(`仅支持 Seedance 2.0 系列模型（${SEEDANCE2_MODEL_PREFIX}-*），当前: ${model}`)
+    const model = normalizeSeedanceModel(record.model || config.model || DEFAULT_MODEL, config.baseUrl)
+    if (!SEEDANCE_MODEL_PREFIXES.some(prefix => model.startsWith(prefix))) {
+      throw new Error(`仅支持 Seedance 2.0/2.5 系列模型，当前: ${model}`)
     }
 
     const prompt = (record.prompt || '').trim()
+    const acceptsInlineReferenceImages = !isFlowingCloud(config.baseUrl)
     const refImages = parseUrlArray(record.referenceImageUrls)
+      .filter(url => acceptsInlineReferenceImages || !url.startsWith('data:image/'))
     const refVideos = parseUrlArray(record.referenceVideoUrls)
     const refAudios = parseUrlArray(record.referenceAudioUrls)
 
@@ -77,6 +79,7 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
       ratio: record.aspectRatio || 'adaptive',
       duration: this.normalizeDuration(record.duration),
       resolution: record.resolution === '480p' ? '480p' : '720p',
+      return_last_frame: true,
       watermark: false,
     }
 
@@ -92,12 +95,13 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
   }
 
   parseGenerateResponse(result: any): VideoGenResponse {
-    const taskId = result.id || result.task_id || result.taskId || result.data?.id || result.data?.task_id || result.data?.taskId
+    const task = unwrapTask(result)
+    const taskId = task.id || task.task_id || task.taskId || task.data?.id || task.data?.task_id || task.data?.taskId
     if (taskId) {
       return { isAsync: true, taskId: String(taskId) }
     }
     // 同步返回
-    const videoUrl = result.video_url || result.content?.video_url || result.data?.video_url
+    const videoUrl = extractVideoUrlFromPayload(task)
     if (videoUrl) {
       return { isAsync: false, videoUrl }
     }
@@ -116,26 +120,27 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
   }
 
   parsePollResponse(result: any): VideoPollResponse {
-    const status = result.status
-    if (status === 'succeeded') {
-      const videoUrl = result.video_url || result.content?.video_url || result.data?.video_url
+    const task = unwrapTask(result)
+    const status = String(task.status || task.state || '').toLowerCase()
+    if (['succeeded', 'success', 'completed'].includes(status)) {
+      const videoUrl = extractVideoUrlFromPayload(task)
       return {
         status: 'completed',
-        videoUrl,
+        videoUrl: videoUrl || undefined,
       }
     }
-    if (status === 'failed') {
+    if (['failed', 'error', 'cancelled', 'canceled'].includes(status)) {
       // 上游 error 可能是对象 { code, message }（如 OutputVideoSensitiveContentDetected），规范成字符串
-      const err = result.error
+      const err = task.error || task.last_error
       const msg = typeof err === 'string' ? err : (err?.message || JSON.stringify(err) || 'Video generation failed')
       const code = err && typeof err === 'object' && err.code ? `[${err.code}] ` : ''
       return { status: 'failed', error: `${code}${msg}` }
     }
-    return { status: status || 'processing' }
+    return { status: status as VideoPollResponse['status'] || 'processing' }
   }
 
   extractVideoUrl(result: any): string | null {
-    return result.video_url || result.content?.video_url || result.data?.video_url || null
+    return extractVideoUrlFromPayload(unwrapTask(result))
   }
 
   private normalizeDuration(duration?: number | null): number {
@@ -144,4 +149,37 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
     // Seedance 2.0 支持 4-15 秒
     return Math.min(15, Math.max(4, parsed))
   }
+}
+
+function normalizeSeedanceModel(model: string, baseUrl: string) {
+  if (isFlowingCloud(baseUrl) && model === 'doubao-seedance-2-0-fast-260128') {
+    return DEFAULT_MODEL
+  }
+  return model
+}
+
+function isFlowingCloud(baseUrl: string) {
+  return normalizeProviderBaseUrl(baseUrl) === 'https://cloudapi.flowingcloud.com'
+}
+
+function unwrapTask(result: any) {
+  if (result?.task && typeof result.task === 'object') return result.task
+  if (result?.data?.task && typeof result.data.task === 'object') return result.data.task
+  if (result?.data && typeof result.data === 'object') return result.data
+  return result || {}
+}
+
+function extractVideoUrlFromPayload(payload: any): string | null {
+  return payload.video_url
+    || payload.videoUrl
+    || payload.content?.video_url
+    || payload.content?.videoUrl
+    || payload.content?.url
+    || payload.output?.video_url
+    || payload.output?.videoUrl
+    || payload.output?.url
+    || payload.result?.video_url
+    || payload.result?.videoUrl
+    || payload.result?.url
+    || null
 }
