@@ -9,11 +9,13 @@ import { now } from '../utils/response.js'
 import { downloadFile, generateImageThumb, readImageAsCompressedDataUrl, removeStoredFiles, saveBase64Image } from '../utils/storage.js'
 import { extractVideoPoster } from '../utils/video-poster.js'
 import { getImageAdapter, getVideoAdapter } from './adapters/registry'
+import { normalizeProviderBaseUrl } from './adapters/url.js'
 import type { AIConfig } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
 import { friendlyErrorMessage } from '../utils/friendly-error.js'
 import { settleCredits } from './credits.js'
 import { reserveCredits } from './credits.js'
+import { isObjectStorageEnabled, signedObjectUrl } from './object-storage.js'
 
 type TaskType = 'image' | 'video'
 
@@ -234,10 +236,11 @@ async function processTask(id: number, config: AIConfig) {
       }))
     } else {
       const adapter = getVideoAdapter(config.provider)
-      const resolvedImageUrl = await normalizeVideoReferenceUrl(params.imageUrl)
-      const resolvedFirstFrameUrl = await normalizeVideoReferenceUrl(params.firstFrameUrl)
-      const resolvedLastFrameUrl = await normalizeVideoReferenceUrl(params.lastFrameUrl)
-      const resolvedReferenceImageUrls = await normalizeVideoReferenceUrls(params.referenceImageUrls)
+      const usePublicImageRefs = needsPublicVideoReferenceImages(config)
+      const resolvedImageUrl = await normalizeVideoReferenceUrl(params.imageUrl, usePublicImageRefs)
+      const resolvedFirstFrameUrl = await normalizeVideoReferenceUrl(params.firstFrameUrl, usePublicImageRefs)
+      const resolvedLastFrameUrl = await normalizeVideoReferenceUrl(params.lastFrameUrl, usePublicImageRefs)
+      const resolvedReferenceImageUrls = await normalizeVideoReferenceUrls(params.referenceImageUrls, usePublicImageRefs)
       // 参考视频/音频文件较大，不适合 dataURL 内联，需解析为公网可访问 URL
       const resolvedReferenceVideoUrls = resolvePublicMediaUrls(params.referenceVideoUrls, 'video')
       const resolvedReferenceAudioUrls = resolvePublicMediaUrls(params.referenceAudioUrls, 'audio')
@@ -566,9 +569,15 @@ async function normalizeReferenceImages(refs: string[] | null | undefined): Prom
   return normalized.filter((item): item is string => !!item).slice(0, 6)
 }
 
-async function normalizeVideoReferenceUrl(value: string | null | undefined): Promise<string | null> {
+function needsPublicVideoReferenceImages(config: AIConfig) {
+  return config.provider.toLowerCase() === 'volcengine'
+    && normalizeProviderBaseUrl(config.baseUrl) === 'https://cloudapi.flowingcloud.com'
+}
+
+async function normalizeVideoReferenceUrl(value: string | null | undefined, usePublicUrl = false): Promise<string | null> {
   const raw = String(value || '').trim()
   if (!raw) return null
+  if (usePublicUrl) return resolvePublicImageUrl(raw)
   if (raw.startsWith('data:image/')) return raw
   if (raw.startsWith('static/') || raw.startsWith('/static/')) {
     const localPath = raw.startsWith('/static/') ? raw.slice(1) : raw
@@ -586,12 +595,62 @@ async function normalizeVideoReferenceUrl(value: string | null | undefined): Pro
   return raw
 }
 
-async function normalizeVideoReferenceUrls(refs: string[] | null | undefined): Promise<string[]> {
+async function normalizeVideoReferenceUrls(refs: string[] | null | undefined, usePublicUrl = false): Promise<string[]> {
   if (!Array.isArray(refs) || !refs.length) return []
   const normalized = await Promise.all(
-    Array.from(new Set(refs.map((item) => String(item || '').trim()).filter(Boolean))).map((item) => normalizeVideoReferenceUrl(item)),
+    Array.from(new Set(refs.map((item) => String(item || '').trim()).filter(Boolean))).map((item) => normalizeVideoReferenceUrl(item, usePublicUrl)),
   )
   return normalized.filter((item): item is string => !!item)
+}
+
+function resolvePublicImageUrl(value: string): string {
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    if (!isPublicHttpUrl(value)) {
+      throw new Error('视频参考图必须是公网可访问 URL，localhost、内网 IP 或本机地址无法被 FlowingCloud 读取。')
+    }
+    return value
+  }
+  if (value.startsWith('data:image/')) {
+    throw new Error('FlowingCloud 视频参考图不支持 data URL。请启用 COS 对象存储或配置公网 PUBLIC_BASE_URL 后重试。')
+  }
+  if (value.startsWith('static/') || value.startsWith('/static/')) {
+    const relativePath = value.startsWith('/static/') ? value.slice(1) : value
+    if (isObjectStorageEnabled()) {
+      const remoteUrl = signedObjectUrl(relativePath, 3600)
+      if (remoteUrl) return remoteUrl
+    }
+
+    const base = (process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')
+    if (base) {
+      if (!isPublicHttpUrl(base)) {
+        throw new Error(`PUBLIC_BASE_URL 当前为 ${base}，不是公网地址；FlowingCloud 无法读取本机或内网参考图。`)
+      }
+      return `${base}/${relativePath}`
+    }
+
+    throw new Error(
+      `视频参考图为本地路径 ${value}，但 FlowingCloud 无法读取本机文件。` +
+      '请在正式环境启用 COS 对象存储，或配置公网 PUBLIC_BASE_URL 后重试。',
+    )
+  }
+  return value
+}
+
+function isPublicHttpUrl(value: string) {
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase()
+    return !(
+      host === 'localhost'
+      || host === '127.0.0.1'
+      || host === '0.0.0.0'
+      || host.startsWith('10.')
+      || host.startsWith('192.168.')
+      || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+    )
+  } catch {
+    return false
+  }
 }
 
 /**

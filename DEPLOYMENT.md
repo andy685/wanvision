@@ -62,7 +62,14 @@ API_KEY_ENCRYPTION_SECRET=使用 openssl rand -hex 32 生成
 ADMIN_PHONE=你的超管手机号
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=替换为强密码
+COS_SECRET_ID=腾讯云 COS SecretId
+COS_SECRET_KEY=腾讯云 COS SecretKey
+COS_BUCKET=存放生成素材的 COS Bucket
+COS_REGION=Bucket 所在地域，如 ap-guangzhou
+COS_PREFIX=wanying
 ```
+
+正式环境必须配置对象存储，后端在 `NODE_ENV=production` 且 COS 未启用时会拒绝启动。生成图片、上传头像、生成视频会先落到容器挂载的 `./data/static`，同时镜像到 COS；当换机器、重新部署或本地文件不存在时，后端 `/static/...` 会签名跳转到 COS。`./data/static` 只作为当前机器缓存，不作为跨机器的唯一数据源。
 
 启动生产编排：
 
@@ -181,7 +188,7 @@ docker compose -f docker-compose.production.yml --env-file .env.production exec 
 tar -czf data-backup_$(date +%F).tar.gz data backend/workspace
 ```
 
-如果启用了 COS，对象文件以 COS 为准，同时保留数据库备份。
+对象文件以 COS 为准；数据库备份仍然必须保留，因为数据库保存了业务数据、任务记录和素材路径。`data/static` 可备份用于快速回滚或缓存预热，但不要依赖它完成跨机器迁移。
 
 ## 9. 生产检查清单
 
@@ -190,5 +197,6 @@ tar -czf data-backup_$(date +%F).tar.gz data backend/workspace
 - MySQL 没有暴露公网端口。
 - 用户端和管理后台都已经配置 HTTPS。
 - `FRONTEND_ORIGIN`、`ADMIN_ORIGIN`、`PUBLIC_BASE_URL` 与真实域名一致。
+- `COS_SECRET_ID`、`COS_SECRET_KEY`、`COS_BUCKET`、`COS_REGION` 已配置；健康检查返回 `storage: "cos"`。
 - 已完成一次数据库备份恢复演练。
 - 已在管理后台配置 AI 服务，并用测试按钮确认连通。

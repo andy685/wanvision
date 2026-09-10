@@ -42,6 +42,10 @@ const projectRoot = path.resolve(__dirname, '../..')
 
 const app = new Hono()
 
+if (process.env.NODE_ENV === 'production' && !isObjectStorageEnabled()) {
+  throw new Error('生产环境必须配置 COS 对象存储：请设置 COS_SECRET_ID、COS_SECRET_KEY、COS_BUCKET、COS_REGION，避免生成素材只保存在单台服务器磁盘。')
+}
+
 // Middleware
 app.use('*', cors({
   origin: [

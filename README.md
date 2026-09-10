@@ -118,6 +118,7 @@ scripts/        — dev.sh / deploy.sh 一键启动与部署脚本
 | `NUXT_PUBLIC_API_BASE` | `/api/v1` | 前端调用的 API 基址；分域部署时设为 `https://api.example.com/api/v1` |
 | `NUXT_PUBLIC_APP_ORIGIN` | — | 用户端前端域名，如 `https://wanying.example.com` |
 | `NUXT_PUBLIC_ADMIN_ORIGIN` | — | 管理后台前端域名，如 `https://admin.wanying.example.com` |
+| `COS_SECRET_ID` / `COS_SECRET_KEY` / `COS_BUCKET` / `COS_REGION` | — | 正式环境必填。生成图片、视频、上传文件会镜像到 COS，换机器时 `/static/...` 可从 COS 签名读取 |
 
 > **说明**：AI 服务的 API Key、Base URL 和模型参数全部在 Web 界面的「设置」页配置并入库，不在配置文件/环境变量中维护。
 

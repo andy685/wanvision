@@ -44,9 +44,7 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
     }
 
     const prompt = (record.prompt || '').trim()
-    const acceptsInlineReferenceImages = !isFlowingCloud(config.baseUrl)
     const refImages = parseUrlArray(record.referenceImageUrls)
-      .filter(url => acceptsInlineReferenceImages || !url.startsWith('data:image/'))
     const refVideos = parseUrlArray(record.referenceVideoUrls)
     const refAudios = parseUrlArray(record.referenceAudioUrls)
 
