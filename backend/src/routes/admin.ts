@@ -11,7 +11,7 @@ import { logAdminAction } from '../services/admin-audit.js'
 import { generateImage, generateVideo } from '../services/generation.js'
 import { getActiveConfigId } from '../services/ai.js'
 import { getPrice, videoActionForDuration } from '../services/pricing.js'
-import { getPlatformSetting, setPlatformSetting } from '../services/platform-settings.js'
+import { getPlatformSetting, setPlatformSetting, settingEnabled } from '../services/platform-settings.js'
 import { resolveTaskNames } from '../utils/task-name.js'
 import { generateImageThumb, saveBase64Image } from '../utils/storage.js'
 
@@ -21,6 +21,12 @@ const PAYMENT_SECRET_KEYS = new Set(PAYMENT_SETTING_KEYS.filter(key => !['wechat
 const PAYMENT_BOOLEAN_KEYS = new Set(['wechat_enabled', 'alipay_enabled'])
 const ADMIN_ROLES = new Set(['super_admin', 'admin'])
 const ADMIN_STATUSES = new Set(['active', 'disabled'])
+
+function paymentBooleanSetting(value: unknown) {
+  if (value === false || value === 0) return 'false'
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return ['false', '0', 'off', 'disabled', 'no'].includes(normalized) ? 'false' : 'true'
+}
 
 function hashPassword(password: string, salt = randomBytes(16).toString('hex')) {
   const digest = scryptSync(password, salt, 64).toString('hex')
@@ -247,7 +253,7 @@ app.patch('/admins/:id', async (c) => {
 app.get('/payment-settings', async (c) => {
   if (!await adminOnly(c)) return c.json({ code: 403, message: '需要管理员权限' }, 403)
   const values = await Promise.all(PAYMENT_SETTING_KEYS.map(async key => [key, await getPlatformSetting(key)] as const))
-  return success(c, Object.fromEntries(values.map(([key, value]) => [key, PAYMENT_BOOLEAN_KEYS.has(key) ? value !== 'false' : PAYMENT_SECRET_KEYS.has(key) ? (value ? 'configured' : '') : value])))
+  return success(c, Object.fromEntries(values.map(([key, value]) => [key, PAYMENT_BOOLEAN_KEYS.has(key) ? settingEnabled(value) : PAYMENT_SECRET_KEYS.has(key) ? (value ? 'configured' : '') : value])))
 })
 
 app.put('/payment-settings', async (c) => {
@@ -262,7 +268,7 @@ app.put('/payment-settings', async (c) => {
   for (const key of PAYMENT_SETTING_KEYS) {
     if (!(key in body) || (PAYMENT_SECRET_KEYS.has(key) && body[key] === 'configured')) continue
     const oldValue = await getPlatformSetting(key)
-    const value = PAYMENT_BOOLEAN_KEYS.has(key) ? (body[key] === false ? 'false' : 'true') : String(body[key] ?? '').trim()
+    const value = PAYMENT_BOOLEAN_KEYS.has(key) ? paymentBooleanSetting(body[key]) : String(body[key] ?? '').trim()
     if (oldValue !== value) {
       await setPlatformSetting(key, value)
       changed.push(key)
@@ -270,8 +276,8 @@ app.put('/payment-settings', async (c) => {
         before[key] = oldValue ? 'configured' : ''
         after[key] = value ? 'configured' : ''
       } else {
-        before[key] = PAYMENT_BOOLEAN_KEYS.has(key) ? oldValue !== 'false' : oldValue
-        after[key] = PAYMENT_BOOLEAN_KEYS.has(key) ? value !== 'false' : value
+        before[key] = PAYMENT_BOOLEAN_KEYS.has(key) ? settingEnabled(oldValue) : oldValue
+        after[key] = PAYMENT_BOOLEAN_KEYS.has(key) ? settingEnabled(value) : value
       }
     }
   }

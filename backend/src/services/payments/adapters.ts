@@ -41,37 +41,32 @@ export function verifyRsa(content: string, publicKey: string, signature: string)
   return false
 }
 
-async function alipayPrecreate(input: PaymentOrderInput) {
+async function alipayPagePay(input: PaymentOrderInput) {
   const appId = required('ALIPAY_APP_ID', await getPlatformSetting('alipay_app_id'))
   const privateKey = required('ALIPAY_PRIVATE_KEY', await getPlatformSetting('alipay_private_key'))
   const paymentNotifyUrl = required('PAYMENT_NOTIFY_URL', await getPlatformSetting('payment_notify_url')).replace(/\/+$/, '')
+  const returnUrl = await getPlatformSetting('alipay_return_url') || process.env.FRONTEND_ORIGIN || ''
   const fields: Record<string, string> = {
-    app_id: appId, method: 'alipay.trade.precreate', format: 'JSON',
+    app_id: appId, method: 'alipay.trade.page.pay', format: 'JSON',
     charset: 'utf-8', sign_type: 'RSA2',
     timestamp: new Date().toISOString().slice(0, 19).replace('T', ' '), version: '1.0', notify_url: `${paymentNotifyUrl}/alipay`,
     biz_content: JSON.stringify({
       out_trade_no: input.orderNo,
+      product_code: 'FAST_INSTANT_TRADE_PAY',
       subject: input.description,
       total_amount: (input.amountFen / 100).toFixed(2),
+      qr_pay_mode: '4',
+      qrcode_width: 240,
       timeout_express: '30m',
     }),
   }
+  if (returnUrl) fields.return_url = returnUrl
   const canonical = Object.keys(fields).sort().map(key => `${key}=${fields[key]}`).join('&')
   fields.sign = signRsa(canonical, privateKey)
   const gateway = process.env.ALIPAY_GATEWAY || 'https://openapi.alipay.com/gateway.do'
-  const response = await fetch(gateway, {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
-    body: new URLSearchParams(fields),
-  })
-  const result = await response.json().catch(() => ({})) as any
-  const payload = result.alipay_trade_precreate_response || result.error_response || {}
-  if (!response.ok || payload.code !== '10000' || !payload.qr_code) {
-    throw new Error(payload.sub_msg || payload.msg || `支付宝预下单失败（${payload.code || response.status}）`)
-  }
+  const url = `${gateway}?${Object.entries(fields).map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&')}`
   return {
-    payment_url: payload.qr_code,
-    qr_code: payload.qr_code,
+    payment_url: url,
     order_no: input.orderNo,
     amount_fen: input.amountFen,
     expires_in: 30 * 60,
@@ -97,7 +92,7 @@ async function wechatNative(input: PaymentOrderInput) {
 class ConfigurableAdapter implements PaymentAdapter {
   constructor(public readonly provider: PaymentProvider) {}
   async createPayment(input: PaymentOrderInput): Promise<PaymentIntent> {
-    try { const payload = this.provider === 'alipay' ? await alipayPrecreate(input) : await wechatNative(input); return { provider: this.provider, configured: true, message: '支付二维码已生成', payload } }
+    try { const payload = this.provider === 'alipay' ? await alipayPagePay(input) : await wechatNative(input); return { provider: this.provider, configured: true, message: '支付二维码已生成', payload } }
     catch (error: any) { return { provider: this.provider, configured: false, message: error?.message || '支付参数待配置' } }
   }
 }

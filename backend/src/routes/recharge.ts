@@ -38,12 +38,12 @@ app.post('/orders', async (c) => {
   if (!account) return badRequest(c, '请先登录')
   const body = await c.req.json().catch(() => ({}))
   const provider = String(body.payment_provider || body.paymentProvider || '')
-  const amountFen = Math.floor(Number(body.amount_fen ?? Number(body.amount || 0) * 100))
+  const amountFen = Math.round(Number(body.amount_fen ?? Number(body.amount || 0) * 100))
   if (!providers.has(provider)) return badRequest(c, '支付方式仅支持微信支付或支付宝')
   if (!await paymentChannelEnabled(provider as 'wechat' | 'alipay')) return badRequest(c, '该支付渠道暂未启用')
   const paymentStatus = await paymentConfigStatus()
   if (!paymentStatus[provider as 'wechat' | 'alipay']) return badRequest(c, '该支付渠道配置未完成，请联系管理员')
-  if (!Number.isFinite(amountFen) || amountFen < 100) return badRequest(c, '充值金额不能低于 1 元')
+  if (!Number.isFinite(amountFen) || amountFen < 10) return badRequest(c, '充值金额不能低于 0.1 元')
   const credits = Math.floor(amountFen / 10)
   const ts = now()
   const orderNo = `WY${Date.now()}${randomUUID().replace(/-/g, '').slice(0, 10)}`
@@ -52,7 +52,7 @@ app.post('/orders', async (c) => {
     amountFen, credits, status: 'pending', createdAt: ts, updatedAt: ts,
   })
   const [order] = await db.select().from(schema.rechargeOrders).where(eq(schema.rechargeOrders.id, getInsertId(result)))
-  return created(c, { ...toSnakeCaseArray([order])[0], payment_status: 'pending', payment_message: '支付适配器待配置' })
+  return created(c, { ...toSnakeCaseArray([order])[0], payment_status: 'pending', payment_message: '订单已创建，待支付' })
 })
 
 // GET /recharge/orders - 当前用户当前工作区的充值订单

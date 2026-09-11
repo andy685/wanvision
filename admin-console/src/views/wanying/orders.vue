@@ -1,16 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import {
-  ElButton,
   ElCard,
   ElEmpty,
-  ElMessageBox,
   ElTable,
   ElTableColumn
 } from "element-plus";
 import { http } from "@/utils/http";
 import { message } from "@/utils/message";
-import { useUserStoreHook } from "@/store/modules/user";
 import WanyingPage from "./components/WanyingPage.vue";
 import { data, errorText, formatTime, paymentProviderLabel, statusLabel } from "./utils/format";
 import { names } from "./utils/constants";
@@ -18,8 +15,6 @@ import { names } from "./utils/constants";
 const [title, subtitle] = names.orders;
 const loading = ref(false);
 const rows = ref<any[]>([]);
-const userStore = useUserStoreHook();
-const isSuperAdmin = computed(() => userStore.roles.includes("super_admin"));
 
 async function load() {
   loading.value = true;
@@ -29,35 +24,6 @@ async function load() {
     message(errorText(error) || "数据加载失败", { type: "error" });
   } finally {
     loading.value = false;
-  }
-}
-
-async function refundOrder(row: any) {
-  if (!isSuperAdmin.value) {
-    message("只有超级管理员可以执行退款", { type: "warning" });
-    return;
-  }
-  try {
-    const { value: reason } = await ElMessageBox.prompt(
-      `确定对订单 ${row.order_no} 退款 ${row.credits} 积分吗？退款后将从用户余额中扣回。`,
-      "确认退款",
-      {
-        confirmButtonText: "确认退款",
-        cancelButtonText: "取消",
-        type: "warning",
-        inputPlaceholder: "必填，如：用户投诉、重复充值",
-        inputValidator: (value: string) =>
-          value?.trim() ? true : "退款理由不能为空"
-      }
-    );
-    await http.request("post", `/admin/orders/${row.order_no}/refund`, {
-      data: { reason: reason.trim() }
-    });
-    await load();
-    message("退款成功", { type: "success" });
-  } catch (error: any) {
-    if (error !== "cancel" && error?.message !== "cancel")
-      message(errorText(error) || "退款失败", { type: "error" });
   }
 }
 
@@ -84,12 +50,6 @@ onMounted(load);
         </ElTableColumn>
         <ElTableColumn label="状态">
           <template #default="{ row }">{{ statusLabel(row.status) }}</template>
-        </ElTableColumn>
-        <ElTableColumn label="操作" width="120">
-          <template #default="{ row }">
-            <ElButton v-if="row.status === 'paid' && isSuperAdmin" link type="danger" @click="refundOrder(row)">退款</ElButton>
-            <span v-else style="color: var(--el-text-color-secondary); font-size: 12px;">-</span>
-          </template>
         </ElTableColumn>
       </ElTable>
       <ElEmpty v-if="!rows.length" description="暂无数据" />

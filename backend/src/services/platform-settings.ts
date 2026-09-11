@@ -24,17 +24,20 @@ export async function setPlatformSetting(key: string, value: string) {
   else await db.insert(schema.platformSettings).values({ settingKey: key, settingValue: encoded, updatedAt: now() })
 }
 
+export function settingEnabled(value: string) {
+  return !['false', '0', 'off', 'disabled', 'no'].includes(value.trim().toLowerCase())
+}
+
 export async function paymentConfigStatus() {
   const values = await Promise.all(['wechat_mch_id', 'wechat_app_id', 'wechat_api_v3_key', 'wechat_serial_no', 'wechat_private_key', 'wechat_platform_public_key', 'payment_notify_url', 'alipay_app_id', 'alipay_private_key', 'alipay_public_key'].map(async key => [key, !!(await getPlatformSetting(key))] as const))
   const map = Object.fromEntries(values)
   const [wechatEnabled, alipayEnabled] = await Promise.all([getPlatformSetting('wechat_enabled'), getPlatformSetting('alipay_enabled')])
-  const enabled = (value: string) => value !== 'false'
   return {
-    wechat: enabled(wechatEnabled) && ['wechat_mch_id', 'wechat_app_id', 'wechat_api_v3_key', 'wechat_serial_no', 'wechat_private_key', 'wechat_platform_public_key', 'payment_notify_url'].every(key => map[key]),
-    alipay: enabled(alipayEnabled) && ['alipay_app_id', 'alipay_private_key', 'alipay_public_key', 'payment_notify_url'].every(key => map[key]),
+    wechat: settingEnabled(wechatEnabled) && ['wechat_mch_id', 'wechat_app_id', 'wechat_api_v3_key', 'wechat_serial_no', 'wechat_private_key', 'wechat_platform_public_key', 'payment_notify_url'].every(key => map[key]),
+    alipay: settingEnabled(alipayEnabled) && ['alipay_app_id', 'alipay_private_key', 'alipay_public_key', 'payment_notify_url'].every(key => map[key]),
   }
 }
 
 export async function paymentChannelEnabled(provider: 'wechat' | 'alipay') {
-  return (await getPlatformSetting(`${provider}_enabled`)) !== 'false'
+  return settingEnabled(await getPlatformSetting(`${provider}_enabled`))
 }

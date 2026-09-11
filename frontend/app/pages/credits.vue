@@ -8,9 +8,10 @@
         </button>
         <h1>积分中心</h1>
       </div>
-      <button class="btn btn-primary" type="button" @click="showRecharge = true">
-        <Plus :size="15" :stroke-width="2" />
-        充值积分
+      <button class="btn btn-primary" type="button" :disabled="paymentStatusLoading" @click="openRechargeModal">
+        <Loader2 v-if="paymentStatusLoading" class="animate-spin" :size="15" :stroke-width="1.9" />
+        <Plus v-else :size="15" :stroke-width="2" />
+        {{ paymentStatusLoading ? '加载中' : '充值积分' }}
       </button>
     </header>
 
@@ -76,7 +77,13 @@
         <template v-if="activePayment">
           <h2 id="recharge-title">{{ providerLabel(activePayment.order.payment_provider) }}扫码支付</h2>
           <p>订单 {{ activePayment.order.order_no }}</p>
-          <div class="qr-shell">
+          <div v-if="activePayment.cashierUrl" class="cashier-shell">
+            <div v-if="paymentLoading" class="qr-placeholder">
+              <Loader2 class="animate-spin" :size="24" :stroke-width="1.8" />
+            </div>
+            <iframe v-else class="alipay-cashier" :src="activePayment.cashierUrl" title="支付宝收银台" scrolling="no"></iframe>
+          </div>
+          <div v-else class="qr-shell">
             <div v-if="paymentLoading" class="qr-placeholder">
               <Loader2 class="animate-spin" :size="24" :stroke-width="1.8" />
             </div>
@@ -102,12 +109,17 @@
               <strong>{{ item.price }} 元</strong><span>{{ item.credits }} 积分</span>
             </button>
           </div>
-          <div class="custom-recharge"><label>自定义金额<input v-model.number="customAmount" class="input" type="number" min="1" step="1" placeholder="输入金额" /></label><span>到账 {{ Math.max(0, customAmount || 0) * 10 }} 积分</span></div>
-          <div class="payment-providers"><button type="button" :class="{ selected: paymentProvider === 'wechat' }" @click="paymentProvider = 'wechat'"><span>微信支付</span><small>{{ paymentReady.wechat ? '可用' : '待配置' }}</small></button><button type="button" :class="{ selected: paymentProvider === 'alipay' }" @click="paymentProvider = 'alipay'"><span>支付宝</span><small>{{ paymentReady.alipay ? '可用' : '待配置' }}</small></button></div>
+          <div class="custom-recharge"><label>自定义金额<input v-model.number="customAmount" class="input" type="number" min="0.1" step="0.1" placeholder="输入金额" /></label><span>到账 {{ previewCredits(customAmount) }} 积分</span></div>
+          <div v-if="availablePaymentProviders.length" class="payment-providers">
+            <button v-for="provider in availablePaymentProviders" :key="provider.value" type="button" :class="{ selected: paymentProvider === provider.value }" @click="paymentProvider = provider.value">
+              <span>{{ provider.label }}</span><small>可用</small>
+            </button>
+          </div>
+          <p v-else-if="!rechargeMessage" class="recharge-message">暂无可用支付渠道，请联系管理员。</p>
           <p v-if="rechargeMessage" class="recharge-message">{{ rechargeMessage }}</p>
-          <button class="btn btn-primary recharge-submit" type="button" :disabled="recharging || !paymentReady[paymentProvider]" @click="createRecharge">
+          <button class="btn btn-primary recharge-submit" type="button" :disabled="recharging || !availablePaymentProviders.length || !paymentReady[paymentProvider]" @click="createRecharge">
             <Loader2 v-if="recharging" class="animate-spin" :size="15" :stroke-width="1.9" />
-            {{ recharging ? '创建支付二维码中…' : paymentReady[paymentProvider] ? '创建支付二维码' : '支付渠道待配置' }}
+            {{ recharging ? '处理中…' : paymentReady[paymentProvider] ? '去支付' : '支付渠道待配置' }}
           </button>
         </template>
       </section>
@@ -136,19 +148,39 @@ const selected = ref(null)
 const paymentProvider = ref('alipay')
 const paymentReady = ref({ wechat: false, alipay: false })
 const recharging = ref(false)
+const paymentStatusLoading = ref(false)
 const paymentLoading = ref(false)
 const checkingPayment = ref(false)
 const activePayment = ref(null)
 const rechargeMessage = ref('')
 const packages = [{ price: 10, credits: 100 }, { price: 50, credits: 500 }, { price: 100, credits: 1000 }, { price: 500, credits: 5000 }]
+const paymentProviderOptions = [{ value: 'alipay', label: '支付宝' }, { value: 'wechat', label: '微信支付' }]
 const totalBalance = computed(() => accounts.value.reduce((sum, item) => sum + Number(item.balance || 0), 0))
 const totalFrozen = computed(() => accounts.value.reduce((sum, item) => sum + Number(item.frozen || 0), 0))
+const availablePaymentProviders = computed(() => paymentProviderOptions.filter(provider => paymentReady.value[provider.value]))
 let paymentPollTimer = null
 
 function ledgerLabel(type) { return ({ welcome: '注册赠送', recharge: '充值到账', recharge_refund: '充值退款', consume: 'AI 生成消费', refund: '生成失败退款', freeze: '积分冻结', admin_adjust: '后台调账' })[type] || '积分变动' }
 function formatDate(value) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-' }
 function providerLabel(provider) { return provider === 'wechat' ? '微信' : '支付宝' }
 function amountYuan(order) { return (Number(order?.amount_fen || 0) / 100).toFixed(2) }
+function previewCredits(amount) { return Math.max(0, Math.floor(Math.round(Number(amount || 0) * 100) / 10)) }
+function applyPaymentReady(payments, { preferAvailable = true } = {}) {
+  paymentReady.value = {
+    wechat: !!payments?.wechat,
+    alipay: !!payments?.alipay,
+  }
+  if (preferAvailable && !paymentReady.value[paymentProvider.value]) {
+    if (paymentReady.value.alipay) paymentProvider.value = 'alipay'
+    else if (paymentReady.value.wechat) paymentProvider.value = 'wechat'
+  }
+  return paymentReady.value
+}
+
+async function refreshPaymentReady(options) {
+  const readiness = await api.get(`/health/ready?t=${Date.now()}`)
+  return applyPaymentReady(readiness?.payments, options)
+}
 
 function updateOrder(latest) {
   const index = orders.value.findIndex(item => item.order_no === latest.order_no)
@@ -179,6 +211,19 @@ function closeRechargeModal() {
   resetPaymentView()
 }
 
+async function openRechargeModal() {
+  rechargeMessage.value = ''
+  paymentStatusLoading.value = true
+  try {
+    await refreshPaymentReady()
+  } catch (e) {
+    rechargeMessage.value = e.message || '支付渠道状态加载失败'
+  } finally {
+    showRecharge.value = true
+    paymentStatusLoading.value = false
+  }
+}
+
 async function refreshOrder(orderNo, { quiet = false } = {}) {
   const latest = await rechargeAPI.get(orderNo)
   const order = updateOrder(latest)
@@ -186,10 +231,12 @@ async function refreshOrder(orderNo, { quiet = false } = {}) {
     activePayment.value = { ...activePayment.value, order }
   }
   if (latest.status === 'paid') {
+    const message = `充值到账 ${latest.credits} 积分`
     stopPaymentPolling()
-    await reloadCredits()
-    rechargeMessage.value = `充值到账 ${latest.credits} 积分`
-    toast.success(rechargeMessage.value)
+    await reloadCreditsPage()
+    showRecharge.value = false
+    resetPaymentView()
+    toast.success(message)
   } else if (latest.status !== 'pending') {
     stopPaymentPolling()
     rechargeMessage.value = `订单状态：${latest.status}`
@@ -215,16 +262,23 @@ function startPaymentPolling(orderNo) {
 }
 
 async function createRecharge() {
-  if (!customAmount.value || customAmount.value < 1) { rechargeMessage.value = '请输入至少 1 元'; return }
+  if (!customAmount.value || customAmount.value < 0.1) { rechargeMessage.value = '请输入至少 0.1 元'; return }
   recharging.value = true; rechargeMessage.value = ''
   try {
-    const order = await rechargeAPI.create(customAmount.value, paymentProvider.value)
+    const provider = paymentProvider.value
+    const ready = await refreshPaymentReady({ preferAvailable: false })
+    if (!ready[provider]) {
+      rechargeMessage.value = '该支付渠道已关闭，请选择其他支付方式。'
+      return
+    }
+    const order = await rechargeAPI.create(customAmount.value, provider)
     updateOrder(order)
     await payOrder(order)
   } catch (e) { rechargeMessage.value = e.message || '订单创建失败' } finally { recharging.value = false }
 }
 async function payOrder(order) {
-  if (!paymentReady.value[order.payment_provider]) {
+  const ready = await refreshPaymentReady({ preferAvailable: false }).catch(() => paymentReady.value)
+  if (!ready[order.payment_provider]) {
     rechargeMessage.value = '该支付渠道配置未完成，请联系管理员。'
     return
   }
@@ -240,7 +294,14 @@ async function payOrder(order) {
       rechargeMessage.value = result.message || '支付商户参数待配置'
       return
     }
-    const qrText = result.payload?.qr_code || result.payload?.payment_url
+    const paymentUrl = result.payload?.payment_url
+    if (order.payment_provider === 'alipay' && paymentUrl) {
+      activePayment.value = { order, cashierUrl: String(paymentUrl) }
+      rechargeMessage.value = '请使用支付宝扫描收银台二维码完成支付。'
+      startPaymentPolling(order.order_no)
+      return
+    }
+    const qrText = result.payload?.qr_code || paymentUrl
     if (!qrText) {
       activePayment.value = null
       rechargeMessage.value = '支付二维码生成失败，请稍后重试。'
@@ -287,18 +348,15 @@ async function reloadCredits() {
   accounts.value = await creditAPI.list() || []
   await loadLedger()
 }
+async function reloadCreditsPage() {
+  await reloadCredits()
+  orders.value = await rechargeAPI.list() || []
+  await refreshPaymentReady().catch(() => paymentReady.value)
+}
 onMounted(async () => {
   if (!user.value) { await navigateTo('/login'); return }
   try {
-    accounts.value = await creditAPI.list() || []
-    await loadLedger()
-    orders.value = await rechargeAPI.list() || []
-    const readiness = await api.get('/health/ready')
-    paymentReady.value = readiness?.payments || paymentReady.value
-    if (!paymentReady.value[paymentProvider.value]) {
-      if (paymentReady.value.alipay) paymentProvider.value = 'alipay'
-      else if (paymentReady.value.wechat) paymentProvider.value = 'wechat'
-    }
+    await reloadCreditsPage()
   } finally { loading.value = false }
 })
 onBeforeUnmount(stopPaymentPolling)
@@ -361,7 +419,31 @@ h1 { margin: 22px 0 0; font-size: 26px; }
 .payment-providers button span { font-size: 13px; }
 .payment-providers button small { color: var(--text-3); font-size: 11px; }
 .payment-providers button.selected small { color: var(--accent); }
-.recharge-modal.is-paying { width: min(100%, 420px); text-align: center; }
+.recharge-modal.is-paying {
+  width: min(100%, 376px);
+  max-height: calc(100dvh - 40px);
+  padding: 22px;
+  overflow-y: auto;
+  text-align: center;
+}
+.cashier-shell {
+  width: min(300px, 100%);
+  height: min(300px, calc(100vw - 76px));
+  display: grid;
+  place-items: center;
+  margin: 4px auto 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  overflow: hidden;
+}
+.alipay-cashier {
+  width: 240px;
+  height: 240px;
+  border: 0;
+  background: #fff;
+  overflow: hidden;
+}
 .qr-shell {
   width: 276px;
   height: 276px;
@@ -378,7 +460,7 @@ h1 { margin: 22px 0 0; font-size: 26px; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px 12px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-1);
@@ -386,7 +468,7 @@ h1 { margin: 22px 0 0; font-size: 26px; }
 }
 .payment-summary span { color: var(--text-3); font-size: 12px; }
 .payment-summary strong { font-size: 18px; font-variant-numeric: tabular-nums; }
-.payment-actions { display: flex; gap: 10px; margin-top: 18px; }
+.payment-actions { display: flex; gap: 10px; margin-top: 12px; }
 .payment-actions .btn { flex: 1; justify-content: center; }
 @media (max-width:700px) {
   .is-orders .ledger-row { grid-template-columns: 1fr auto; }
