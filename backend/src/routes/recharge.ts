@@ -5,7 +5,7 @@ import { db, getInsertId, pool, schema } from '../db/index.js'
 import { badRequest, created, success, now } from '../utils/response.js'
 import { toSnakeCaseArray } from '../utils/transform.js'
 import { workspaceForToken } from '../services/credits.js'
-import { paymentAdapters } from '../services/payments/adapters.js'
+import { paymentAdapters, verifyRsa } from '../services/payments/adapters.js'
 import { getPlatformSetting, paymentChannelEnabled, paymentConfigStatus } from '../services/platform-settings.js'
 
 const app = new Hono()
@@ -103,13 +103,10 @@ app.post('/webhooks/:provider', async (c) => {
   const signature = String(body.signature || body.sign || '')
   if (!normalizedOrderNo || !tradeNo || !signature) return c.json({ code: 400, message: '支付回调参数不完整' }, 400)
   if (provider === 'alipay') {
-    const publicKey = (await getPlatformSetting('alipay_public_key')).replace(/\\n/g, '\n')
+    const publicKey = await getPlatformSetting('alipay_public_key')
     if (!publicKey) return c.json({ code: 400, message: 'ALIPAY_PUBLIC_KEY 未配置' }, 400)
     const content = Object.keys(body).filter(key => !['sign', 'sign_type'].includes(key) && body[key] !== '' && body[key] != null).sort().map(key => `${key}=${body[key]}`).join('&')
-    const verifier = createVerify('RSA-SHA256')
-    verifier.update(content)
-    verifier.end()
-    if (!verifier.verify(publicKey, signature, 'base64')) return c.json({ code: 401, message: '支付宝回调签名无效' }, 401)
+    if (!verifyRsa(content, publicKey, signature)) return c.json({ code: 401, message: '支付宝回调签名无效' }, 401)
     if (!['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(String(body.trade_status))) return c.text('success')
   } else if (!wechatVerified) {
     const secret = await getPlatformSetting('wechat_webhook_secret')
@@ -136,8 +133,8 @@ app.post('/webhooks/:provider', async (c) => {
     const balanceAfter = account.balance + order.credits
     const ts = now()
     await connection.query('UPDATE credit_accounts SET balance = balance + ?, updated_at = ? WHERE workspace_id = ?', [order.credits, ts, order.workspace_id])
-    await connection.query('INSERT INTO credit_ledger (workspace_id, user_id, type, amount, balance_after, reference_type, reference_id, note, idempotency_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [order.workspace_id, order.user_id, 'recharge', order.credits, balanceAfter, 'recharge_order', orderNo, `充值到账 ${order.credits} 积分`, `recharge:${orderNo}`, ts])
-    await connection.query('UPDATE recharge_orders SET status = \'paid\', provider_trade_no = ?, paid_at = ?, updated_at = ? WHERE order_no = ?', [tradeNo, ts, ts, orderNo])
+    await connection.query('INSERT INTO credit_ledger (workspace_id, user_id, type, amount, balance_after, reference_type, reference_id, note, idempotency_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [order.workspace_id, order.user_id, 'recharge', order.credits, balanceAfter, 'recharge_order', normalizedOrderNo, `充值到账 ${order.credits} 积分`, `recharge:${normalizedOrderNo}`, ts])
+    await connection.query('UPDATE recharge_orders SET status = \'paid\', provider_trade_no = ?, paid_at = ?, updated_at = ? WHERE order_no = ?', [tradeNo, ts, ts, normalizedOrderNo])
     await connection.commit()
     return provider === 'alipay' ? c.text('success') : success(c, { order_no: normalizedOrderNo, status: 'paid', credits: order.credits })
   } catch (error: any) {

@@ -68,28 +68,57 @@
       </div>
     </section>
 
-    <div v-if="showRecharge" class="modal-backdrop" @click.self="showRecharge = false">
-      <section class="recharge-modal" role="dialog" aria-modal="true" aria-labelledby="recharge-title">
-        <button class="modal-close" type="button" aria-label="关闭" @click="showRecharge = false">
+    <div v-if="showRecharge" class="modal-backdrop" @click.self="closeRechargeModal">
+      <section :class="['recharge-modal', { 'is-paying': activePayment }]" role="dialog" aria-modal="true" aria-labelledby="recharge-title">
+        <button class="modal-close" type="button" aria-label="关闭" @click="closeRechargeModal">
           <X :size="18" :stroke-width="2" />
         </button>
-        <h2 id="recharge-title">充值积分</h2><p>1 元 = 10 积分，积分永久有效。</p>
-        <div class="recharge-options">
-          <button v-for="item in packages" :key="item.price" type="button" :class="['recharge-option', { selected: selected?.price === item.price }]" @click="selected = item; customAmount = item.price">
-            <strong>{{ item.price }} 元</strong><span>{{ item.credits }} 积分</span>
+        <template v-if="activePayment">
+          <h2 id="recharge-title">{{ providerLabel(activePayment.order.payment_provider) }}扫码支付</h2>
+          <p>订单 {{ activePayment.order.order_no }}</p>
+          <div class="qr-shell">
+            <div v-if="paymentLoading" class="qr-placeholder">
+              <Loader2 class="animate-spin" :size="24" :stroke-width="1.8" />
+            </div>
+            <img v-else class="payment-qr" :src="activePayment.qrDataUrl" alt="支付二维码" />
+          </div>
+          <div class="payment-summary">
+            <span>支付金额</span><strong>¥{{ amountYuan(activePayment.order) }}</strong>
+            <span>到账积分</span><strong>{{ activePayment.order.credits }}</strong>
+          </div>
+          <p v-if="rechargeMessage" class="recharge-message">{{ rechargeMessage }}</p>
+          <div class="payment-actions">
+            <button class="btn" type="button" @click="resetPaymentView">重新选择</button>
+            <button class="btn btn-primary" type="button" :disabled="checkingPayment" @click="checkActiveOrder">
+              <RefreshCw :class="{ 'animate-spin': checkingPayment }" :size="15" :stroke-width="1.9" />
+              {{ checkingPayment ? '检查中' : '我已支付' }}
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <h2 id="recharge-title">充值积分</h2><p>1 元 = 10 积分，积分永久有效。</p>
+          <div class="recharge-options">
+            <button v-for="item in packages" :key="item.price" type="button" :class="['recharge-option', { selected: selected?.price === item.price }]" @click="selected = item; customAmount = item.price">
+              <strong>{{ item.price }} 元</strong><span>{{ item.credits }} 积分</span>
+            </button>
+          </div>
+          <div class="custom-recharge"><label>自定义金额<input v-model.number="customAmount" class="input" type="number" min="1" step="1" placeholder="输入金额" /></label><span>到账 {{ Math.max(0, customAmount || 0) * 10 }} 积分</span></div>
+          <div class="payment-providers"><button type="button" :class="{ selected: paymentProvider === 'wechat' }" @click="paymentProvider = 'wechat'"><span>微信支付</span><small>{{ paymentReady.wechat ? '可用' : '待配置' }}</small></button><button type="button" :class="{ selected: paymentProvider === 'alipay' }" @click="paymentProvider = 'alipay'"><span>支付宝</span><small>{{ paymentReady.alipay ? '可用' : '待配置' }}</small></button></div>
+          <p v-if="rechargeMessage" class="recharge-message">{{ rechargeMessage }}</p>
+          <button class="btn btn-primary recharge-submit" type="button" :disabled="recharging || !paymentReady[paymentProvider]" @click="createRecharge">
+            <Loader2 v-if="recharging" class="animate-spin" :size="15" :stroke-width="1.9" />
+            {{ recharging ? '创建支付二维码中…' : paymentReady[paymentProvider] ? '创建支付二维码' : '支付渠道待配置' }}
           </button>
-        </div>
-        <div class="custom-recharge"><label>自定义金额<input v-model.number="customAmount" class="input" type="number" min="1" step="1" placeholder="输入金额" /></label><span>到账 {{ Math.max(0, customAmount || 0) * 10 }} 积分</span></div>
-        <div class="payment-providers"><button type="button" :class="{ selected: paymentProvider === 'wechat' }" @click="paymentProvider = 'wechat'"><span>微信支付</span><small>{{ paymentReady.wechat ? '可用' : '待配置' }}</small></button><button type="button" :class="{ selected: paymentProvider === 'alipay' }" @click="paymentProvider = 'alipay'"><span>支付宝</span><small>{{ paymentReady.alipay ? '可用' : '待配置' }}</small></button></div>
-        <p v-if="rechargeMessage" class="recharge-message">{{ rechargeMessage }}</p>
-        <button class="btn btn-primary recharge-submit" type="button" :disabled="recharging || !paymentReady[paymentProvider]" @click="createRecharge">{{ recharging ? '创建订单中…' : paymentReady[paymentProvider] ? '创建充值订单' : '支付渠道待配置' }}</button>
+        </template>
       </section>
     </div>
   </main>
 </template>
 
 <script setup>
-import { ArrowLeft, Plus, X } from 'lucide-vue-next'
+import { ArrowLeft, Loader2, Plus, RefreshCw, X } from 'lucide-vue-next'
+import QRCode from 'qrcode'
+import { toast } from 'vue-sonner'
 import { api, creditAPI, rechargeAPI } from '~/composables/useApi'
 const { user } = useAuth()
 const accounts = ref([])
@@ -104,35 +133,145 @@ const ledgerPages = computed(() => Math.max(1, Math.ceil(ledgerTotal.value / led
 const showRecharge = ref(false)
 const customAmount = ref(10)
 const selected = ref(null)
-const paymentProvider = ref('wechat')
+const paymentProvider = ref('alipay')
 const paymentReady = ref({ wechat: false, alipay: false })
 const recharging = ref(false)
+const paymentLoading = ref(false)
+const checkingPayment = ref(false)
+const activePayment = ref(null)
 const rechargeMessage = ref('')
 const packages = [{ price: 10, credits: 100 }, { price: 50, credits: 500 }, { price: 100, credits: 1000 }, { price: 500, credits: 5000 }]
 const totalBalance = computed(() => accounts.value.reduce((sum, item) => sum + Number(item.balance || 0), 0))
 const totalFrozen = computed(() => accounts.value.reduce((sum, item) => sum + Number(item.frozen || 0), 0))
+let paymentPollTimer = null
+
 function ledgerLabel(type) { return ({ welcome: '注册赠送', recharge: '充值到账', recharge_refund: '充值退款', consume: 'AI 生成消费', refund: '生成失败退款', freeze: '积分冻结', admin_adjust: '后台调账' })[type] || '积分变动' }
 function formatDate(value) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-' }
+function providerLabel(provider) { return provider === 'wechat' ? '微信' : '支付宝' }
+function amountYuan(order) { return (Number(order?.amount_fen || 0) / 100).toFixed(2) }
+
+function updateOrder(latest) {
+  const index = orders.value.findIndex(item => item.order_no === latest.order_no)
+  if (index >= 0) {
+    orders.value[index] = { ...orders.value[index], ...latest }
+    return orders.value[index]
+  }
+  orders.value = [latest, ...orders.value]
+  return latest
+}
+
+function stopPaymentPolling() {
+  if (!paymentPollTimer) return
+  clearTimeout(paymentPollTimer)
+  paymentPollTimer = null
+}
+
+function resetPaymentView() {
+  stopPaymentPolling()
+  activePayment.value = null
+  paymentLoading.value = false
+  checkingPayment.value = false
+  rechargeMessage.value = ''
+}
+
+function closeRechargeModal() {
+  showRecharge.value = false
+  resetPaymentView()
+}
+
+async function refreshOrder(orderNo, { quiet = false } = {}) {
+  const latest = await rechargeAPI.get(orderNo)
+  const order = updateOrder(latest)
+  if (activePayment.value?.order?.order_no === orderNo) {
+    activePayment.value = { ...activePayment.value, order }
+  }
+  if (latest.status === 'paid') {
+    stopPaymentPolling()
+    await reloadCredits()
+    rechargeMessage.value = `充值到账 ${latest.credits} 积分`
+    toast.success(rechargeMessage.value)
+  } else if (latest.status !== 'pending') {
+    stopPaymentPolling()
+    rechargeMessage.value = `订单状态：${latest.status}`
+  } else if (!quiet) {
+    rechargeMessage.value = '还没有收到支付成功通知，请稍后再试。'
+  }
+  return latest
+}
+
+function startPaymentPolling(orderNo) {
+  stopPaymentPolling()
+  const tick = async (remaining = 120) => {
+    if (!activePayment.value || activePayment.value.order.order_no !== orderNo) return
+    try {
+      const latest = await refreshOrder(orderNo, { quiet: true })
+      if (latest.status !== 'pending' || remaining <= 0) return
+    } catch {
+      if (remaining <= 0) return
+    }
+    paymentPollTimer = setTimeout(() => tick(remaining - 1), 3000)
+  }
+  paymentPollTimer = setTimeout(() => tick(), 2500)
+}
+
 async function createRecharge() {
   if (!customAmount.value || customAmount.value < 1) { rechargeMessage.value = '请输入至少 1 元'; return }
   recharging.value = true; rechargeMessage.value = ''
   try {
     const order = await rechargeAPI.create(customAmount.value, paymentProvider.value)
-    orders.value = [order, ...orders.value]
-    rechargeMessage.value = `订单 ${order.order_no} 已创建，待支付后到账 ${order.credits} 积分。`
+    updateOrder(order)
+    await payOrder(order)
   } catch (e) { rechargeMessage.value = e.message || '订单创建失败' } finally { recharging.value = false }
 }
 async function payOrder(order) {
-  const paymentWindow = typeof window !== 'undefined' ? window.open('', '_blank') : null
+  if (!paymentReady.value[order.payment_provider]) {
+    rechargeMessage.value = '该支付渠道配置未完成，请联系管理员。'
+    return
+  }
+  showRecharge.value = true
+  paymentLoading.value = true
+  activePayment.value = { order, qrDataUrl: '' }
+  rechargeMessage.value = ''
+  stopPaymentPolling()
   try {
     const result = await rechargeAPI.pay(order.order_no)
-    rechargeMessage.value = result.configured ? '支付请求已提交，请完成支付。' : result.message || '支付商户参数待配置'
-    if (result.configured && result.payload?.payment_url) {
-      if (paymentWindow) paymentWindow.location.href = result.payload.payment_url
-      else window.open(result.payload.payment_url, '_blank', 'noopener,noreferrer')
-    } else paymentWindow?.close()
-    for (let i = 0; i < 5 && order.status === 'pending'; i++) { await new Promise(resolve => setTimeout(resolve, 2000)); const latest = await rechargeAPI.get(order.order_no); Object.assign(order, latest); if (latest.status === 'paid') { await reloadCredits(); rechargeMessage.value = `充值到账 ${latest.credits} 积分` } }
-  } catch (e) { paymentWindow?.close(); rechargeMessage.value = e.message || '支付请求失败' }
+    if (!result.configured) {
+      activePayment.value = null
+      rechargeMessage.value = result.message || '支付商户参数待配置'
+      return
+    }
+    const qrText = result.payload?.qr_code || result.payload?.payment_url
+    if (!qrText) {
+      activePayment.value = null
+      rechargeMessage.value = '支付二维码生成失败，请稍后重试。'
+      return
+    }
+    const qrDataUrl = await QRCode.toDataURL(String(qrText), {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 240,
+      color: { dark: '#111827', light: '#ffffff' },
+    })
+    activePayment.value = { order, qrDataUrl, qrText }
+    rechargeMessage.value = `请使用${providerLabel(order.payment_provider)}扫码完成支付。`
+    startPaymentPolling(order.order_no)
+  } catch (e) {
+    activePayment.value = null
+    rechargeMessage.value = e.message || '支付请求失败'
+  } finally {
+    paymentLoading.value = false
+  }
+}
+async function checkActiveOrder() {
+  if (!activePayment.value?.order?.order_no) return
+  checkingPayment.value = true
+  try {
+    await refreshOrder(activePayment.value.order.order_no)
+  } catch (e) {
+    rechargeMessage.value = e.message || '订单状态查询失败'
+  } finally {
+    checkingPayment.value = false
+  }
 }
 async function loadLedger() {
   const data = await creditAPI.ledger({ page: ledgerPage.value, pageSize: ledgerPageSize }) || {}
@@ -156,8 +295,13 @@ onMounted(async () => {
     orders.value = await rechargeAPI.list() || []
     const readiness = await api.get('/health/ready')
     paymentReady.value = readiness?.payments || paymentReady.value
+    if (!paymentReady.value[paymentProvider.value]) {
+      if (paymentReady.value.alipay) paymentProvider.value = 'alipay'
+      else if (paymentReady.value.wechat) paymentProvider.value = 'wechat'
+    }
   } finally { loading.value = false }
 })
+onBeforeUnmount(stopPaymentPolling)
 </script>
 
 <style scoped>
@@ -200,8 +344,54 @@ h1 { margin: 22px 0 0; font-size: 26px; }
 </style>
 
 <style scoped>
+.is-orders .ledger-row { grid-template-columns: minmax(0, 1fr) auto 170px auto; }
+.order-pay {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--accent);
+  font: 650 12px/1 var(--font-body);
+  cursor: pointer;
+}
+.order-pay:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.order-pay:disabled { opacity: .45; cursor: not-allowed; }
 .payment-providers button { min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; }
 .payment-providers button span { font-size: 13px; }
 .payment-providers button small { color: var(--text-3); font-size: 11px; }
 .payment-providers button.selected small { color: var(--accent); }
+.recharge-modal.is-paying { width: min(100%, 420px); text-align: center; }
+.qr-shell {
+  width: 276px;
+  height: 276px;
+  display: grid;
+  place-items: center;
+  margin: 6px auto 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.qr-placeholder { color: var(--text-3); }
+.payment-qr { width: 240px; height: 240px; display: block; }
+.payment-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-1);
+  text-align: left;
+}
+.payment-summary span { color: var(--text-3); font-size: 12px; }
+.payment-summary strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.payment-actions { display: flex; gap: 10px; margin-top: 18px; }
+.payment-actions .btn { flex: 1; justify-content: center; }
+@media (max-width:700px) {
+  .is-orders .ledger-row { grid-template-columns: 1fr auto; }
+  .is-orders .ledger-row time, .is-orders .ledger-row .order-pay { grid-column: 1 / -1; }
+  .order-pay { justify-self: start; }
+  .payment-actions { flex-direction: column; }
+}
 </style>

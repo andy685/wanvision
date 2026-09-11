@@ -146,10 +146,10 @@ onMounted(load);
                   <ElInput v-model="form.alipay_app_id" placeholder="开放平台创建应用后获取" :disabled="!isSuperAdmin" />
                 </ElFormItem>
                 <ElFormItem label="应用私钥">
-                  <ElInput v-model="form.alipay_private_key" type="textarea" :rows="4" :placeholder="secretPlaceholder('alipay_private_key') || '应用私钥内容（-----BEGIN PRIVATE KEY----- 开头）'" :disabled="!isSuperAdmin" />
+                  <ElInput v-model="form.alipay_private_key" type="textarea" :rows="4" :placeholder="secretPlaceholder('alipay_private_key') || '填写支付宝应用私钥，支持 PEM 或纯私钥内容'" :disabled="!isSuperAdmin" />
                 </ElFormItem>
                 <ElFormItem label="支付宝公钥">
-                  <ElInput v-model="form.alipay_public_key" type="textarea" :rows="4" :placeholder="secretPlaceholder('alipay_public_key')" :disabled="!isSuperAdmin" />
+                  <ElInput v-model="form.alipay_public_key" type="textarea" :rows="4" :placeholder="secretPlaceholder('alipay_public_key') || '填写支付宝公钥，支持 PEM 或纯公钥内容'" :disabled="!isSuperAdmin" />
                 </ElFormItem>
                 <ElFormItem label="支付回跳地址">
                   <ElInput v-model="form.alipay_return_url" placeholder="用户支付完成后的回跳页面地址" :disabled="!isSuperAdmin" />

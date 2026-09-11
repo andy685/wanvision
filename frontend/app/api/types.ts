@@ -80,13 +80,31 @@ export interface Task {
 }
 
 export interface RechargeOrder {
+  id: number
   order_no: string
   user_id: number
-  amount: number
+  workspace_id: number
+  amount_fen: number
   credits: number
   status: 'pending' | 'paid' | 'refunded'
   payment_provider?: 'wechat' | 'alipay'
+  provider_trade_no?: string
+  paid_at?: string
   created_at: string
+  updated_at?: string
+}
+
+export interface RechargePaymentIntent {
+  provider: 'wechat' | 'alipay'
+  configured: boolean
+  message: string
+  payload?: {
+    payment_url?: string
+    qr_code?: string
+    order_no?: string
+    amount_fen?: number
+    expires_in?: number
+  }
 }
 
 export interface PricingItem {
