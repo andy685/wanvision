@@ -143,6 +143,18 @@ export async function readImageAsCompressedDataUrl(
     quality?: number
   } = {},
 ): Promise<string> {
+  const { buffer, mimeType } = await readImageAsCompressedBuffer(relativePath, options)
+  return `data:${mimeType};base64,${buffer.toString('base64')}`
+}
+
+export async function readImageAsCompressedBuffer(
+  relativePath: string,
+  options: {
+    maxWidth?: number
+    maxHeight?: number
+    quality?: number
+  } = {},
+): Promise<{ buffer: Buffer; mimeType: string }> {
   const filePath = getAbsolutePath(relativePath)
   const maxWidth = options.maxWidth ?? 768
   const maxHeight = options.maxHeight ?? 768
@@ -159,7 +171,7 @@ export async function readImageAsCompressedDataUrl(
     ? await resized.flatten({ background: '#ffffff' }).jpeg({ quality, mozjpeg: true }).toBuffer()
     : await resized.jpeg({ quality, mozjpeg: true }).toBuffer()
   const mimeType = 'image/jpeg'
-  return `data:${mimeType};base64,${output.toString('base64')}`
+  return { buffer: output, mimeType }
 }
 
 export function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {

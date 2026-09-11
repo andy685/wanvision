@@ -4,9 +4,10 @@
  */
 import { db, getInsertId, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
 import { getActiveConfig, getConfigById } from './ai.js'
 import { now } from '../utils/response.js'
-import { downloadFile, generateImageThumb, readImageAsCompressedDataUrl, removeStoredFiles, saveBase64Image } from '../utils/storage.js'
+import { downloadFile, generateImageThumb, readImageAsCompressedBuffer, readImageAsCompressedDataUrl, removeStoredFiles, saveBase64Image } from '../utils/storage.js'
 import { extractVideoPoster } from '../utils/video-poster.js'
 import { getImageAdapter, getVideoAdapter } from './adapters/registry'
 import { normalizeProviderBaseUrl } from './adapters/url.js'
@@ -15,7 +16,7 @@ import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuc
 import { friendlyErrorMessage } from '../utils/friendly-error.js'
 import { settleCredits } from './credits.js'
 import { reserveCredits } from './credits.js'
-import { isObjectStorageEnabled, signedObjectUrl } from './object-storage.js'
+import { isObjectStorageEnabled, mirrorToObjectStorage, signedObjectUrl } from './object-storage.js'
 
 type TaskType = 'image' | 'video'
 
@@ -577,7 +578,7 @@ function needsPublicVideoReferenceImages(config: AIConfig) {
 async function normalizeVideoReferenceUrl(value: string | null | undefined, usePublicUrl = false): Promise<string | null> {
   const raw = String(value || '').trim()
   if (!raw) return null
-  if (usePublicUrl) return resolvePublicImageUrl(raw)
+  if (usePublicUrl) return await resolvePublicImageUrl(raw)
   if (raw.startsWith('data:image/')) return raw
   if (raw.startsWith('static/') || raw.startsWith('/static/')) {
     const localPath = raw.startsWith('/static/') ? raw.slice(1) : raw
@@ -603,7 +604,7 @@ async function normalizeVideoReferenceUrls(refs: string[] | null | undefined, us
   return normalized.filter((item): item is string => !!item)
 }
 
-function resolvePublicImageUrl(value: string): string {
+async function resolvePublicImageUrl(value: string): Promise<string> {
   if (value.startsWith('http://') || value.startsWith('https://')) {
     if (!isPublicHttpUrl(value)) {
       throw new Error('视频参考图必须是公网可访问 URL，localhost、内网 IP 或本机地址无法被 FlowingCloud 读取。')
@@ -616,7 +617,7 @@ function resolvePublicImageUrl(value: string): string {
   if (value.startsWith('static/') || value.startsWith('/static/')) {
     const relativePath = value.startsWith('/static/') ? value.slice(1) : value
     if (isObjectStorageEnabled()) {
-      const remoteUrl = signedObjectUrl(relativePath, 3600)
+      const remoteUrl = await signedFlowingCloudReferenceUrl(relativePath)
       if (remoteUrl) return remoteUrl
     }
 
@@ -634,6 +635,32 @@ function resolvePublicImageUrl(value: string): string {
     )
   }
   return value
+}
+
+function flowingCloudReferencePath(relativePath: string) {
+  const hash = createHash('sha1').update(relativePath).digest('hex').slice(0, 20)
+  return `static/flowingcloud-reference-images/${hash}.jpg`
+}
+
+async function signedFlowingCloudReferenceUrl(relativePath: string): Promise<string | null> {
+  const normalizedPath = relativePath.replace(/^\/+/, '')
+  const jpegPath = flowingCloudReferencePath(normalizedPath)
+  try {
+    const { buffer, mimeType } = await readImageAsCompressedBuffer(normalizedPath, {
+      maxWidth: 1024,
+      maxHeight: 1024,
+      quality: 82,
+    })
+    await mirrorToObjectStorage(jpegPath, buffer, mimeType)
+    return signedObjectUrl(jpegPath, 3600)
+  } catch (err) {
+    logTaskWarn('VideoTask', 'flowingcloud-reference-normalize-failed', {
+      path: normalizedPath,
+      fallback: 'original-cos-url',
+      error: (err as Error).message,
+    })
+    return signedObjectUrl(normalizedPath, 3600)
+  }
 }
 
 function isPublicHttpUrl(value: string) {
